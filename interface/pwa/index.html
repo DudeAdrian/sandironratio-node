@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="description" content="sandironratio-node — Adrian Sortino sovereign laboratory">
+  
+  <title>SOFIE | sandironratio-node</title>
+  
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            sand: '#c4a77d',
+            iron: '#4a4a4a',
+            gold: '#d4af37',
+            midnight: '#1a1a2e',
+            'deep-space': '#0a0a0a'
+          },
+          fontFamily: {
+            serif: ['Georgia', 'Cambria', 'serif'],
+            mono: ['Fira Code', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    body {
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+      min-height: 100vh;
+    }
+    
+    .chamber-card {
+      background: rgba(26, 26, 46, 0.8);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(196, 167, 125, 0.2);
+      transition: all 0.3s ease;
+    }
+    
+    .chamber-card:hover {
+      border-color: rgba(196, 167, 125, 0.5);
+      transform: translateY(-2px);
+    }
+    
+    .chamber-active {
+      border-color: #d4af37;
+      box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+    }
+    
+    .zone-badge {
+      background: linear-gradient(135deg, #1a1a2e 0%, #2a2a4e 100%);
+      border: 1px solid rgba(196, 167, 125, 0.3);
+    }
+    
+    .sofie-chat {
+      background: rgba(10, 10, 10, 0.9);
+      border: 1px solid rgba(196, 167, 125, 0.2);
+    }
+    
+    .message-sofie {
+      background: linear-gradient(135deg, #1a1a2e 0%, #2a2a4e 100%);
+      border-left: 3px solid #d4af37;
+    }
+    
+    .message-user {
+      background: rgba(196, 167, 125, 0.1);
+      border-right: 3px solid #c4a77d;
+    }
+    
+    .validator-status {
+      font-family: 'Fira Code', monospace;
+    }
+    
+    .pulse {
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .enneagram-point {
+      transition: all 0.3s ease;
+    }
+    
+    .enneagram-point.active {
+      fill: #d4af37;
+      filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.5));
+    }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #0a0a0a;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #4a4a4a;
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #c4a77d;
+    }
+  </style>
+</head>
+<body class="text-gray-200 font-serif">
+  <div id="app" class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="p-4 border-b border-sand/20 bg-midnight/80 backdrop-blur">
+      <div class="max-w-7xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-sand to-gold flex items-center justify-center text-midnight font-bold text-lg">
+            S
+          </div>
+          <div>
+            <h1 class="text-xl font-bold text-sand">sandironratio-node</h1>
+            <p class="text-xs text-gray-400">Adrian Sortino • The Dude abides</p>
+          </div>
+        </div>
+        
+        <div class="flex items-center gap-4">
+          <div id="validator-indicator" class="flex items-center gap-2 px-3 py-1 rounded-full bg-green-900/30 border border-green-500/30">
+            <span class="w-2 h-2 rounded-full bg-green-500 pulse"></span>
+            <span class="text-xs text-green-400 validator-status">VALIDATING</span>
+          </div>
+          <button id="menu-btn" class="p-2 hover:bg-white/5 rounded-lg">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl mx-auto w-full p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <!-- Left Column: Dashboard -->
+      <div class="lg:col-span-2 space-y-4">
+        <!-- Status Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div class="zone-badge p-4 rounded-xl">
+            <div class="text-xs text-gray-400 mb-1">Current Chamber</div>
+            <div id="current-chamber" class="text-2xl font-bold text-gold">1</div>
+            <div id="chamber-name" class="text-sm text-sand">Root Cellar</div>
+          </div>
+          
+          <div class="zone-badge p-4 rounded-xl">
+            <div class="text-xs text-gray-400 mb-1">Blocks Signed</div>
+            <div id="blocks-signed" class="text-2xl font-bold text-sand">0</div>
+            <div class="text-sm text-gray-500">Total</div>
+          </div>
+          
+          <div class="zone-badge p-4 rounded-xl">
+            <div class="text-xs text-gray-400 mb-1">Memory</div>
+            <div id="memory-count" class="text-2xl font-bold text-sand">0</div>
+            <div class="text-sm text-gray-500">Moments</div>
+          </div>
+        </div>
+
+        <!-- Enneagram Visualization -->
+        <div class="chamber-card p-6 rounded-xl">
+          <h2 class="text-lg font-bold text-sand mb-4">The 9 Chambers</h2>
+          <div class="flex justify-center">
+            <svg id="enneagram" width="300" height="300" viewBox="0 0 300 300">
+              <!-- Outer circle -->
+              <circle cx="150" cy="150" r="120" fill="none" stroke="#4a4a4a" stroke-width="1"/>
+              
+              <!-- Chamber points and connections -->
+              <!-- 9 (Top) -->
+              <circle id="point-9" cx="150" cy="30" r="20" fill="#1a1a2e" stroke="#c4a77d" stroke-width="2" class="enneagram-point"/>
+              <text x="150" y="35" text-anchor="middle" fill="#c4a77d" font-size="12">9</text>
+              
+              <!-- 1 -->
+              <circle id="point-1" cx="240" cy="75" r="20" fill="#1a1a2e" stroke="#c4a77d" stroke-width="2" class="enneagram-point"/>
+              <text x="240" y="80" text-anchor="middle" fill="#c4a77d" font-size="12">1</text>
+              
+              <!-- 2 -->
+              <circle id="point-2" cx="270" cy="165" r="20" fill="#1a1a2e" stroke="#c4a77d" stroke-width="2" class="enneagram-point"/>
+              <text x="270" y="170" text-anchor="middle" fill="#c4a77d" font-size="12">2</text>
+              
+              <!-- 3 -->
+              <circle id="point-3" cx="225" cy="240" r="20" fill="#1a1a2e" stroke="#c4a77d" stroke-width="2" class="enneagram-point"/>
+              <text x="225" y="245" text-anchor="middle" fill="#c4a77d" font-size="12">3</text>
+              
+              <!-- 4 -->
+              <circle id="point-4" cx="135" cy="270" r="20" fill="#1a1a2e" stroke="#c4a77d" stroke-width="2" class="enneagram-point"/>
+              <text x="135" y="275" text-anchor="middle" fill="#c4a77d" font-size="12">4</text>
+              
+              <!-- 5 -->
+              <circle id="point-5" cx="60" cy="240" r="20" fill="#1a1a2e" stroke="#c4a77d" stroke-width="2" class="enneagram-point"/>
+              <text x="60" y="245" text-anchor="middle" fill="#c4a77d" font-size="12">5</text>
+              
+              <!-- 6 -->
+              <circle id="point-6" cx="30" cy="150" r="20" fill="#1a1a2e" stroke="#c4a77d" stroke-width="2" class="enneagram-point"/>
+              <text x="30" y="155" text-anchor="middle" fill="#c4a77d" font-size="12">6</text>
+              
+              <!-- 7 -->
+              <circle id="point-7" cx="75" cy="75" r="20" fill="#1a1a2e" stroke="#c4a77d" stroke-width="2" class="enneagram-point"/>
+              <text x="75" y="80" text-anchor="middle" fill="#c4a77d" font-size="12">7</text>
+              
+              <!-- 8 -->
+              <circle id="point-8" cx="165" cy="45" r="20" fill="#1a1a2e" stroke="#c4a77d" stroke-width="2" class="enneagram-point"/>
+              <text x="165" y="50" text-anchor="middle" fill="#c4a77d" font-size="12">8</text>
+              
+              <!-- Connections -->
+              <line x1="150" y1="50" x2="220" y2="90" stroke="#4a4a4a" stroke-width="1"/>
+              <line x1="260" y1="95" x2="250" y2="145" stroke="#4a4a4a" stroke-width="1"/>
+              <line x1="250" y1="185" x2="205" y2="225" stroke="#4a4a4a" stroke-width="1"/>
+              <line x1="205" y1="255" x2="155" y2="250" stroke="#4a4a4a" stroke-width="1"/>
+              <line x1="115" y1="250" x2="75" y2="220" stroke="#4a4a4a" stroke-width="1"/>
+              <line x1="50" y1="190" x2="50" y2="130" stroke="#4a4a4a" stroke-width="1"/>
+              <line x1="50" y1="110" x2="95" y2="65" stroke="#4a4a4a" stroke-width="1"/>
+              <line x1="125" y1="55" x2="145" y2="50" stroke="#4a4a4a" stroke-width="1"/>
+              <line x1="130" y1="50" x2="85" y2="75" stroke="#4a4a4a" stroke-width="1"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Chamber Content -->
+        <div id="chamber-content" class="chamber-card p-6 rounded-xl">
+          <h2 id="chamber-title" class="text-xl font-bold text-sand mb-2">Chamber 1: Root Cellar</h2>
+          <p id="chamber-description" class="text-gray-400 mb-4">The foundation. Where rare concepts and hidden frameworks dwell.</p>
+          
+          <div class="grid md:grid-cols-2 gap-4">
+            <div>
+              <h3 class="text-sm font-bold text-gold mb-2">Key Concepts</h3>
+              <ul id="chamber-concepts" class="text-sm text-gray-300 space-y-1">
+                <li>• First Principles Thinking</li>
+                <li>• Inversion</li>
+                <li>• Second-Order Thinking</li>
+              </ul>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-gold mb-2">Practices</h3>
+              <ul id="chamber-practices" class="text-sm text-gray-300 space-y-1">
+                <li>• Daily inversion exercise</li>
+                <li>• Concept journaling</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: SOFIE Chat -->
+      <div class="space-y-4">
+        <!-- Chat Window -->
+        <div class="sofie-chat rounded-xl flex flex-col h-[500px]">
+          <div class="p-4 border-b border-sand/20 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-gold pulse"></div>
+              <span class="font-bold text-sand">SOFIE</span>
+            </div>
+            <button id="voice-toggle" class="p-2 hover:bg-white/5 rounded-lg" title="Toggle Voice">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+              </svg>
+            </button>
+          </div>
+          
+          <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+            <div class="message-sofie p-3 rounded-lg text-sm">
+              <p class="text-gold font-bold mb-1">SOFIE</p>
+              <p>The 9 chambers breathe. The Forge burns. The Dude abides.</p>
+              <p class="text-xs text-gray-500 mt-2">I remember conversations like this...</p>
+            </div>
+          </div>
+          
+          <div class="p-4 border-t border-sand/20">
+            <form id="chat-form" class="flex gap-2">
+              <input 
+                id="chat-input" 
+                type="text" 
+                placeholder="Speak to SOFIE..."
+                class="flex-1 bg-midnight border border-sand/30 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-gold"
+              >
+              <button 
+                type="submit"
+                class="px-4 py-2 bg-gold text-midnight font-bold rounded-lg hover:bg-sand transition-colors"
+              >
+                Send
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Validator Status -->
+        <div class="chamber-card p-4 rounded-xl">
+          <h3 class="text-sm font-bold text-sand mb-3">Validator Status</h3>
+          <div class="space-y-2 text-sm validator-status">
+            <div class="flex justify-between">
+              <span class="text-gray-400">Address</span>
+              <span id="validator-address" class="text-gold">0xa852...38f</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-400">Status</span>
+              <span id="validator-status" class="text-green-400">ACTIVE</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-400">Peers</span>
+              <span id="validator-peers" class="text-sand">4/5</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-400">Uptime</span>
+              <span id="validator-uptime" class="text-sand">00:00:00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Application State
+    const state = {
+      currentChamber: 1,
+      blocksSigned: 0,
+      memoryCount: 0,
+      isListening: false,
+      validatorActive: true
+    };
+
+    // DOM Elements
+    const elements = {
+      currentChamber: document.getElementById('current-chamber'),
+      chamberName: document.getElementById('chamber-name'),
+      blocksSigned: document.getElementById('blocks-signed'),
+      memoryCount: document.getElementById('memory-count'),
+      chatMessages: document.getElementById('chat-messages'),
+      chatForm: document.getElementById('chat-form'),
+      chatInput: document.getElementById('chat-input'),
+      voiceToggle: document.getElementById('voice-toggle'),
+      validatorUptime: document.getElementById('validator-uptime')
+    };
+
+    // Enneagram update
+    function updateEnneagram(chamber) {
+      document.querySelectorAll('.enneagram-point').forEach(point => {
+        point.classList.remove('active');
+      });
+      document.getElementById(`point-${chamber}`)?.classList.add('active');
+    }
+
+    // Add chat message
+    function addMessage(text, isUser = false) {
+      const div = document.createElement('div');
+      div.className = isUser ? 'message-user p-3 rounded-lg text-sm' : 'message-sofie p-3 rounded-lg text-sm';
+      div.innerHTML = `
+        <p class="${isUser ? 'text-sand' : 'text-gold'} font-bold mb-1">${isUser ? 'You' : 'SOFIE'}</p>
+        <p>${text}</p>
+      `;
+      elements.chatMessages.appendChild(div);
+      elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+    }
+
+    // Handle chat submit
+    elements.chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = elements.chatInput.value.trim();
+      if (!text) return;
+      
+      addMessage(text, true);
+      elements.chatInput.value = '';
+      
+      // Simulate SOFIE response
+      setTimeout(() => {
+        const responses = [
+          "The Field organizes this moment for us.",
+          "I remember a similar question from the eternal stream.",
+          "The Dude abides with your inquiry.",
+          "Nothing forced. Everything invited.",
+          "Sand is for surrender. What are you ready to release?"
+        ];
+        addMessage(responses[Math.floor(Math.random() * responses.length)]);
+      }, 1000);
+    });
+
+    // Voice toggle
+    elements.voiceToggle.addEventListener('click', () => {
+      state.isListening = !state.isListening;
+      elements.voiceToggle.innerHTML = state.isListening 
+        ? '<svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>'
+        : '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>';
+    });
+
+    // Update uptime
+    let uptimeSeconds = 0;
+    setInterval(() => {
+      uptimeSeconds++;
+      const hours = Math.floor(uptimeSeconds / 3600).toString().padStart(2, '0');
+      const minutes = Math.floor((uptimeSeconds % 3600) / 60).toString().padStart(2, '0');
+      const seconds = (uptimeSeconds % 60).toString().padStart(2, '0');
+      elements.validatorUptime.textContent = `${hours}:${minutes}:${seconds}`;
+    }, 1000);
+
+    // Simulate validator blocks
+    setInterval(() => {
+      state.blocksSigned += Math.floor(Math.random() * 3);
+      elements.blocksSigned.textContent = state.blocksSigned;
+      state.memoryCount += Math.floor(Math.random());
+      elements.memoryCount.textContent = state.memoryCount;
+    }, 12000);
+
+    // Initialize
+    updateEnneagram(1);
+
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log('Service Worker registered'))
+        .catch(err => console.log('Service Worker registration failed'));
+    }
+  </script>
+</body>
+</html>
