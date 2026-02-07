@@ -4,13 +4,14 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  * MAIN SERVER — The sovereign laboratory unified
  * 
- * Fastify HTTP/2 server bringing together all 6 zones:
+ * Fastify HTTP/2 server bringing together all 7 zones:
  * 1. The Forge — Block validation metrics
  * 2. The Observatory — Astrology API
  * 3. The Library — Knowledge endpoints
  * 4. The Mirror — SOFIE chat API
  * 5. The 9 Chambers — Academy progression
  * 6. The Bridge — Terracare interface
+ * 7. The Hives — 10-Hive geographic consensus network
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -29,6 +30,9 @@ import { chaldeanNumerology } from './library/numerology/chaldean.js';
 import chamberManager, { surrenderRitual } from './chambers/index.js';
 import academyAPI from './bridge/academy-api.js';
 import bridgeServer from './bridge/bridge-server.js';
+import { hexStore } from './db/hex-store.js';
+import { hexChamberManager } from './chambers/hex-chamber-manager.js';
+import { getHiveStatusSummary, getHive, HIVES, MIGRATION_THRESHOLD } from './config/hives.js';
 
 /**
  * Create Fastify server
@@ -224,6 +228,171 @@ async function startServer() {
   app.get('/api/bridge/stats', async () => bridgeServer.getStats());
 
   // ═══════════════════════════════════════════════════════════════════════════════
+  // ZONE 7: THE HIVES (10-Hive Geographic Consensus Network)
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  // Get all hive status
+  app.get('/api/hives/status', async () => ({
+    hives: getHiveStatusSummary(),
+    migrationThreshold: MIGRATION_THRESHOLD,
+    totalAgents: HIVES.reduce((sum, h) => sum + h.current, 0),
+    consensusMechanism: '66% neighbor wall alignment',
+    walls: {
+      n: { name: 'Nourishment', value: 5 },
+      ne: { name: 'Creation', value: 15 },
+      se: { name: 'Service', value: 3 },
+      s: { name: 'Transparency', value: 10 },
+      sw: { name: 'Guard', value: 20 },
+      nw: { name: 'Attunement', value: 8 }
+    }
+  }));
+
+  // Get specific chamber details
+  app.get('/api/hives/:hive_id/chambers/:address', async (request) => {
+    const { hive_id, address } = request.params as any;
+    const chamber = hexStore.getChamberByAddress(address);
+    
+    if (!chamber || chamber.hive_id !== parseInt(hive_id)) {
+      return { error: 'Chamber not found', address };
+    }
+    
+    const neighbors = hexChamberManager.getNeighbors(address);
+    const consensus = hexChamberManager.calculateChamberConsensus(address);
+    const agents = hexStore.getAgentsInChamber(chamber.id);
+    
+    return {
+      chamber: {
+        address: chamber.address,
+        hive_id: chamber.hive_id,
+        walls: {
+          n: chamber.wall_n,
+          ne: chamber.wall_ne,
+          se: chamber.wall_se,
+          s: chamber.wall_s,
+          sw: chamber.wall_sw,
+          nw: chamber.wall_nw
+        },
+        consensus_reached: chamber.consensus_reached,
+        last_consensus_at: chamber.last_consensus_at
+      },
+      neighbors: neighbors.map(n => ({
+        address: n.address,
+        direction: n.direction
+      })),
+      consensus: {
+        alignment: consensus.alignment,
+        matching_neighbors: consensus.matchingNeighbors,
+        is_aligned: consensus.alignment >= 66
+      },
+      agents: agents.map(a => ({
+        agent_id: a.agent_id,
+        bee_role: a.bee_role,
+        nectar_balance: a.nectar_balance,
+        graduation_level: a.graduation_level
+      }))
+    };
+  });
+
+  // Graduate an agent from Level 1 (shadow) to Level 2 (confirmed)
+  app.post('/api/nectar/graduate', async (request) => {
+    const { agent_id, proof_hash } = request.body as any;
+    
+    if (!agent_id) {
+      return { error: 'agent_id required' };
+    }
+    
+    const agent = hexStore.getAgent(agent_id);
+    if (!agent) {
+      return { error: 'Agent not found' };
+    }
+    
+    if (agent.graduation_level !== 1) {
+      return { error: 'Agent already graduated or invalid level' };
+    }
+    
+    const result = hexStore.graduateAgent(agent_id);
+    
+    if (result.success) {
+      // Mint the shadow nectar to confirmed balance
+      // This would integrate with the actual Nectar contract
+      return {
+        success: true,
+        agent_id,
+        graduated_to_level: 2,
+        nectar_minted: agent.shadow_nectar,
+        message: 'Shadow Nectar crystallized into confirmed balance'
+      };
+    }
+    
+    return { error: 'Graduation failed' };
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ZONE 8: GOD MODE (Jarvis Bridge - DudeAdrian Admin Control)
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  // Import Jarvis Bridge
+  const { getJarvisBridge } = await import('./bridge/jarvis-bridge.js');
+  const jarvisBridge = getJarvisBridge();
+  await jarvisBridge.initialize();
+  
+  // Get repository manifest
+  app.get('/api/admin/manifest', async () => ({
+    owner: 'DudeAdrian',
+    repositories: jarvisBridge.getRepositories(),
+    god_mode: true,
+    jarvis_connected: jarvisBridge['isConnected']
+  }));
+  
+  // Get repository status via Jarvis
+  app.get('/api/admin/repos/:name/status', async (request) => {
+    const { name } = request.params as any;
+    const status = await jarvisBridge.getRepoStatus(name);
+    return status || { error: 'Repository not found or Jarvis unavailable' };
+  });
+  
+  // Execute voice/command via Jarvis
+  app.post('/api/admin/command', async (request) => {
+    const { command, confirmed = false } = request.body as any;
+    
+    if (!command) {
+      return { error: 'command required' };
+    }
+    
+    const result = await jarvisBridge.sendCommand(command, confirmed);
+    
+    // Log to ledger
+    hexStore.logConsensus(1, 0, JSON.stringify({
+      type: 'admin_command',
+      command,
+      result: result.success,
+      timestamp: new Date().toISOString()
+    }), 100);
+    
+    return result;
+  });
+  
+  // Check Admin voice enrollment
+  app.get('/api/admin/voice/enrolled', async () => {
+    const enrolled = await jarvisBridge.isAdminEnrolled();
+    return {
+      admin_enrolled: enrolled,
+      message: enrolled ? 'Admin voice enrolled' : 'Admin voice enrollment required'
+    };
+  });
+  
+  // Get Jarvis status
+  app.get('/api/admin/jarvis/status', async () => {
+    return await jarvisBridge.getJarvisStatus();
+  });
+  
+  // Daily briefing
+  app.get('/api/admin/briefing', async () => {
+    const briefing = await jarvisBridge.generateDailyBriefing();
+    return { briefing };
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
   // ANAGRAM PROOF
   // ═══════════════════════════════════════════════════════════════════════════════
   app.get('/anagram', async () => ({
@@ -260,11 +429,20 @@ async function startServer() {
 ║   POST /api/observatory/vedic     — Calculate Vedic chart                     ║
 ║   GET  /api/chambers              — All 9 chambers                            ║
 ║   GET  /api/bridge/presence       — Adrian's current state                    ║
+║   GET  /api/hives/status          — 10-Hive network status                    ║
+║   GET  /api/hives/:id/chambers/:addr — Chamber details                        ║
+║   POST /api/nectar/graduate       — Graduate shadow to confirmed              ║
+║   🔴 GOD MODE (DudeAdrian):                                                    ║
+║   GET  /api/admin/manifest        — Repository manifest                       ║
+║   GET  /api/admin/repos/:name/status — Repository status via Jarvis           ║
+║   POST /api/admin/command         — Execute voice/command                     ║
+║   GET  /api/admin/jarvis/status   — Jarvis AI status                          ║
+║   GET  /api/admin/briefing        — Daily briefing                            ║
 ║                                                                               ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
     `);
     
-    console.log(`\n✨ The Dude abides. All 6 zones unified.\n`);
+    console.log(`\n✨ The Dude abides. All 8 zones unified. God Mode Active.\n`);
     
   } catch (err) {
     app.log.error(err);

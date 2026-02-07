@@ -12,7 +12,11 @@
     "forge:start": "tsx forge/validator.ts",
     "observatory:test": "tsx observatory/western.ts",
     "sofie:speak": "tsx mirror/sofie-core.ts",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "start:prod": "npm run build && node dist/awaken.js",
+    "god:mode": "powershell -ExecutionPolicy Bypass -File sofie.ps1",
+    "god:mode:bash": "bash sofie.sh",
+    "terminal": "python admin/admin-terminal.py"
   },
   "keywords": [
     "sandironratio",

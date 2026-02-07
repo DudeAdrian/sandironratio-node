@@ -1,0 +1,282 @@
+{
+  "manifest_version": "1.0.0",
+  "owner": "DudeAdrian",
+  "owner_github": "https://github.com/DudeAdrian",
+  "access_level": "admin",
+  "god_mode": true,
+  "repositories": [
+    {
+      "id": 1,
+      "name": "Terracare-Ledger",
+      "full_name": "DudeAdrian/Terracare-Ledger",
+      "type": "smart-contracts",
+      "language": "solidity",
+      "description": "Core blockchain layer - IdentityRegistry, TokenEngine, ActivityRegistry",
+      "default_branch": "main",
+      "deployable": false,
+      "priority": "critical"
+    },
+    {
+      "id": 2,
+      "name": "sofie-systems",
+      "full_name": "DudeAdrian/sofie-systems",
+      "type": "iot-bridge",
+      "language": "typescript",
+      "description": "Smart home IoT bridge - water, energy, climate monitoring",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "high"
+    },
+    {
+      "id": 3,
+      "name": "sofie-backend",
+      "full_name": "DudeAdrian/sofie-backend",
+      "type": "api",
+      "language": "typescript",
+      "description": "Regional data API - agriculture metrics and benchmarks",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "high"
+    },
+    {
+      "id": 4,
+      "name": "sofie-llama-backend",
+      "full_name": "DudeAdrian/sofie-llama-backend",
+      "type": "ai-core",
+      "language": "python",
+      "description": "Jarvis AI core - voice biometric, code generation, LLM orchestration",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "critical"
+    },
+    {
+      "id": 5,
+      "name": "sofie-map-system",
+      "full_name": "DudeAdrian/sofie-map-system",
+      "type": "visualization",
+      "language": "javascript",
+      "description": "Global map visualization - Canvas-based community rendering",
+      "default_branch": "main",
+      "deployable": false,
+      "priority": "medium"
+    },
+    {
+      "id": 6,
+      "name": "sandironratio-node",
+      "full_name": "DudeAdrian/sandironratio-node",
+      "type": "lab-host",
+      "language": "typescript",
+      "description": "Sovereign laboratory host - 10-Hive consciousness, God Mode terminal",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "critical",
+      "is_local": true
+    },
+    {
+      "id": 7,
+      "name": "terratone",
+      "full_name": "DudeAdrian/terratone",
+      "type": "frequency-engine",
+      "language": "typescript",
+      "description": "Frequency generator for wellness and agriculture",
+      "default_branch": "main",
+      "deployable": false,
+      "priority": "medium"
+    },
+    {
+      "id": 8,
+      "name": "Heartware",
+      "full_name": "DudeAdrian/Heartware",
+      "type": "ui",
+      "language": "javascript",
+      "description": "Web3 wellness UI - wallet integration, voice hooks, 3D Galaxy",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "high"
+    },
+    {
+      "id": 9,
+      "name": "Harmonic-Balance",
+      "full_name": "DudeAdrian/Harmonic-Balance",
+      "type": "geometry-engine",
+      "language": "python",
+      "description": "Sacred geometry for hexagonal habitats - resonant cavity design",
+      "default_branch": "main",
+      "deployable": false,
+      "priority": "low"
+    },
+    {
+      "id": 10,
+      "name": "tholos-medica",
+      "full_name": "DudeAdrian/tholos-medica",
+      "type": "medical",
+      "language": "typescript",
+      "description": "Medical records and telehealth integration (placeholder)",
+      "default_branch": "main",
+      "deployable": false,
+      "priority": "low",
+      "status": "scaffold"
+    },
+    {
+      "id": 11,
+      "name": "Pollen",
+      "full_name": "DudeAdrian/Pollen",
+      "type": "ai-agent",
+      "language": "typescript",
+      "description": "Personal AI agent layer - biometric analysis, hive consensus",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "high"
+    },
+    {
+      "id": 12,
+      "name": "terracare-seeds",
+      "full_name": "DudeAdrian/terracare-seeds",
+      "type": "vertical-api",
+      "language": "javascript",
+      "description": "Seed layer API - Identity Registry interface",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "medium"
+    },
+    {
+      "id": 13,
+      "name": "terracare-water",
+      "full_name": "DudeAdrian/terracare-water",
+      "type": "vertical-api",
+      "language": "javascript",
+      "description": "Water management API - flow monitoring, quality tracking",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "high"
+    },
+    {
+      "id": 14,
+      "name": "terracare-energy",
+      "full_name": "DudeAdrian/terracare-energy",
+      "type": "vertical-api",
+      "language": "javascript",
+      "description": "Energy management API - production, consumption, grid",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "high"
+    },
+    {
+      "id": 15,
+      "name": "terracare-food",
+      "full_name": "DudeAdrian/terracare-food",
+      "type": "vertical-api",
+      "language": "javascript",
+      "description": "Food production API - crop tracking, distribution",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "high"
+    },
+    {
+      "id": 16,
+      "name": "terracare-community",
+      "full_name": "DudeAdrian/terracare-community",
+      "type": "vertical-api",
+      "language": "javascript",
+      "description": "Community management API - member registry, governance",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "medium"
+    },
+    {
+      "id": 17,
+      "name": "terracare-education",
+      "full_name": "DudeAdrian/terracare-education",
+      "type": "vertical-api",
+      "language": "javascript",
+      "description": "Education platform API - courses, certifications",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "medium"
+    },
+    {
+      "id": 18,
+      "name": "terracare-art",
+      "full_name": "DudeAdrian/terracare-art",
+      "type": "vertical-api",
+      "language": "javascript",
+      "description": "Art registry API - NFTs, provenance, exhibitions",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "low"
+    },
+    {
+      "id": 19,
+      "name": "terracare-animals",
+      "full_name": "DudeAdrian/terracare-animals",
+      "type": "vertical-api",
+      "language": "javascript",
+      "description": "Animal welfare API - tracking, biometrics, geofencing",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "high"
+    },
+    {
+      "id": 20,
+      "name": "terracare-messenger",
+      "full_name": "DudeAdrian/terracare-messenger",
+      "type": "communication",
+      "language": "javascript",
+      "description": "Encrypted messaging - Signal protocol, WebRTC",
+      "default_branch": "main",
+      "deployable": true,
+      "priority": "high"
+    }
+  ],
+  "security": {
+    "whitelist_pattern": "^https://github\\.com/DudeAdrian/.*$",
+    "allowed_operations": [
+      "read", "write", "commit", "branch", "merge", "deploy"
+    ],
+    "confirmation_required": [
+      "delete", "force_push", "merge_to_main", "production_deploy"
+    ],
+    "rate_limits": {
+      "commits_per_hour": 10,
+      "file_writes_per_hour": 20,
+      "deployments_per_hour": 5,
+      "deletions_per_hour": 3
+    }
+  },
+  "jarvis_config": {
+    "voice_model": "base",
+    "llm_model": "llama3.1:70b",
+    "ollama_host": "http://localhost:11434",
+    "hive_api_url": "http://localhost:3000",
+    "command_timeout": 30,
+    "confirmation_timeout": 30,
+    "autonomous_mode": true,
+    "watch_interval": 900
+  },
+  "voice_commands": {
+    "wake_words": ["sofie", "sophie", "hum", "jarvis"],
+    "admin_phrases": [
+      "status of all repos",
+      "status of {repo}",
+      "build {feature} in {repo}",
+      "create {item} in {repo}",
+      "check hive",
+      "hive status",
+      "deploy {repo}",
+      "treasury",
+      "nectar balance",
+      "grid credits"
+    ]
+  },
+  "ledger_integration": {
+    "anchor_actions": true,
+    "transparency_mode": "full",
+    "hash_algorithm": "keccak256",
+    "action_types": [
+      "code_commit",
+      "voice_command",
+      "system_config",
+      "deployment"
+    ]
+  }
+}
