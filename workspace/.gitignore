@@ -1,0 +1,4 @@
+# Council Workspace - Cloned repositories
+# These are transient working copies, not committed to git
+*
+!.gitignore

@@ -322,6 +322,16 @@ export class HexStore extends EventEmitter {
   }
   
   /**
+   * Get all agents in a chamber
+   */
+  getAgentsInChamber(chamberId: number): PollenAgent[] {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    const stmt = this.db.prepare('SELECT * FROM pollen_agents WHERE chamber_id = ?');
+    return stmt.all(chamberId) as PollenAgent[];
+  }
+  
+  /**
    * Update agent ping
    */
   updateAgentPing(agentId: string): void {

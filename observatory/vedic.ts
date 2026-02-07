@@ -458,5 +458,4 @@ export class VedicObservatory {
 
 // Export singleton
 export const vedicObservatory = new VedicObservatory();
-export { NAKSHATRAS, DASHA_PERIODS, DASHA_SEQUENCE };
 export default vedicObservatory;

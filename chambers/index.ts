@@ -626,5 +626,4 @@ export class ChamberManager extends EventEmitter {
 
 // Export singleton
 export const chamberManager = new ChamberManager();
-export { CHAMBERS };
 export default chamberManager;

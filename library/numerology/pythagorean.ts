@@ -319,5 +319,4 @@ export class PythagoreanNumerology {
 
 // Export singleton
 export const pythagoreanNumerology = new PythagoreanNumerology();
-export { PYTHAGOREAN_CHART, PYTHAGOREAN_MEANINGS };
 export default pythagoreanNumerology;

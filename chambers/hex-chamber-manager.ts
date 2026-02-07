@@ -174,12 +174,24 @@ export class HexChamberManager extends EventEmitter {
   /**
    * Calculate consensus for a chamber based on neighbor alignment
    */
-  calculateChamberConsensus(chamberId: number): { 
+  calculateChamberConsensus(chamberIdOrAddress: number | string): { 
     alignment: number; 
     matches: number; 
     total: number;
     consensusReached: boolean;
   } {
+    let chamberId: number;
+    
+    if (typeof chamberIdOrAddress === 'string') {
+      const chamber = hexStore.getChamberByAddress(chamberIdOrAddress);
+      if (!chamber) {
+        return { alignment: 0, matches: 0, total: 0, consensusReached: false };
+      }
+      chamberId = chamber.id;
+    } else {
+      chamberId = chamberIdOrAddress;
+    }
+    
     const chamber = hexStore.getChamberById(chamberId);
     if (!chamber) {
       return { alignment: 0, matches: 0, total: 0, consensusReached: false };
@@ -272,6 +284,33 @@ export class HexChamberManager extends EventEmitter {
     if (!chamber) return undefined;
     
     return this.enrichChamber(chamber);
+  }
+  
+  /**
+   * Get neighbor chamber addresses with directions
+   */
+  getNeighbors(address: string): Array<{ address: string; direction: string }> {
+    const chamber = hexStore.getChamberByAddress(address);
+    if (!chamber) return [];
+    
+    const hex = hexGrid.indexToHex(chamber.id % 144000);
+    const neighbors = hexGrid.getNeighbors(hex);
+    
+    const result: Array<{ address: string; direction: string }> = [];
+    const directions: Array<keyof typeof neighbors> = ['n', 'ne', 'se', 's', 'sw', 'nw'];
+    
+    for (const dir of directions) {
+      const neighborHex = neighbors[dir];
+      const neighborIndex = hexGrid.hexToIndex(neighborHex);
+      const neighborAddress = `${chamber.hive_id}:${chamber.life_path}.hex${neighborIndex}.gen`;
+      
+      result.push({
+        address: neighborAddress,
+        direction: dir
+      });
+    }
+    
+    return result;
   }
   
   /**

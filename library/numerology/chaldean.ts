@@ -282,5 +282,4 @@ export class ChaldeanNumerology {
 
 // Export singleton
 export const chaldeanNumerology = new ChaldeanNumerology();
-export { CHALDEAN_CHART, CHALDEAN_MEANINGS };
 export default chaldeanNumerology;

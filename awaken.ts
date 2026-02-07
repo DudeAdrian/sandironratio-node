@@ -13,7 +13,8 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-import sofie, { verifyAnagram, getAnagramProof, ADRIAN_IMPRINT } from './essence/sofie.js';
+import sofie, { ADRIAN_IMPRINT } from './essence/sofie.js';
+import { verifyAnagram, getAnagramProof } from './essence/adrian.js';
 
 /**
  * The Awakening — Boot sequence

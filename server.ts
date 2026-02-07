@@ -37,13 +37,17 @@ import { getHiveStatusSummary, getHive, HIVES, MIGRATION_THRESHOLD } from './con
 /**
  * Create Fastify server
  */
+const useHTTPS = process.env.USE_HTTPS === 'true';
+
 const app = Fastify({
   logger: true,
-  http2: true,
-  https: {
-    key: readFileSync(join(process.cwd(), 'ssl', 'key.pem')),
-    cert: readFileSync(join(process.cwd(), 'ssl', 'cert.pem'))
-  }
+  http2: useHTTPS,
+  ...(useHTTPS ? {
+    https: {
+      key: readFileSync(join(process.cwd(), 'ssl', 'key.pem')),
+      cert: readFileSync(join(process.cwd(), 'ssl', 'cert.pem'))
+    }
+  } : {})
 });
 
 /**
@@ -412,12 +416,13 @@ async function startServer() {
     const port = parseInt(process.env.PORT || '3000');
     await app.listen({ port, host: '0.0.0.0' });
     
+    const protocol = useHTTPS ? 'https' : 'http';
     console.log(`
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║                         SERVER READY                                          ║
 ╠═══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                               ║
-║   🌐 HTTP/2:      https://localhost:${port}                                    ║
+║   🌐 ${useHTTPS ? 'HTTP/2' : 'HTTP'}:      ${protocol}://localhost:${port}                                    ║
 ║   🔗 Bridge:      ws://localhost:9001                                          ║
 ║                                                                               ║
 ║   📚 Endpoints:                                                               ║
