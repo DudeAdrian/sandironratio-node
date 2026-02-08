@@ -398,7 +398,7 @@ function Invoke-SofieChat {
 }
 
 # ============================================================================
-# VOICE INPUT
+# VOICE INPUT - Continuous listening like Alexa/Siri
 # ============================================================================
 function Test-Microphone {
     try {
@@ -410,87 +410,80 @@ function Test-Microphone {
     }
 }
 
-function Select-Microphone {
-    $pyFile = "$env:TEMP\listmics_$([Guid]::NewGuid().ToString().Substring(0,8)).py"
-    $outFile = "$env:TEMP\mics_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
-    
-    @'
-import speech_recognition as sr
-mics = sr.Microphone.list_microphone_names()
-for i, name in enumerate(mics):
-    print(f"{i}: {name}")
-'@ | Out-File -FilePath $pyFile -Encoding UTF8
-    
-    Start-Process -FilePath "python" -ArgumentList $pyFile `
-        -Wait -WindowStyle Hidden -RedirectStandardOutput $outFile
-    
-    $mics = Get-Content $outFile -ErrorAction SilentlyContinue
-    Remove-Item $pyFile, $outFile -Force -ErrorAction SilentlyContinue
-    
-    Write-Host ""
-    Write-Host "Available microphones:" -ForegroundColor Cyan
-    $mics | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
-    Write-Host ""
-    
-    $selection = Read-Host "Enter microphone number (or press Enter for default)"
-    if ($selection -match '^\d+$') {
-        return [int]$selection
-    }
-    return $null
-}
-
 function Get-VoiceInput {
+    param([switch]$Continuous)
+    
     $outFile = "$env:TEMP\voice_out_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
-    $errFile = "$env:TEMP\voice_err_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
     $pyFile = "$env:TEMP\voice_$([Guid]::NewGuid().ToString().Substring(0,8)).py"
     
-    # Simple Python script using default microphone
-    $pyCode = @'
+    # Python script - continuous listening mode
+    if ($Continuous) {
+        $pyCode = @'
 import speech_recognition as sr
 import sys
 
 try:
     r = sr.Recognizer()
-    r.energy_threshold = 100
+    r.energy_threshold = 150
     r.dynamic_energy_threshold = True
-    r.pause_threshold = 0.8
+    r.pause_threshold = 1.5
     
     with sr.Microphone() as source:
-        r.adjust_for_ambient_noise(source, duration=1)
-        audio = r.listen(source, timeout=8, phrase_time_limit=12)
+        r.adjust_for_ambient_noise(source, duration=0.5)
+        # Listen continuously without timeout
+        audio = r.listen(source, phrase_time_limit=10)
+    
+    text = r.recognize_google(audio)
+    if text:
+        print(text)
+except:
+    pass
+'@
+    } else {
+        $pyCode = @'
+import speech_recognition as sr
+import sys
+
+try:
+    r = sr.Recognizer()
+    r.energy_threshold = 150
+    r.dynamic_energy_threshold = True
+    r.pause_threshold = 1.0
+    
+    with sr.Microphone() as source:
+        r.adjust_for_ambient_noise(source, duration=0.5)
+        audio = r.listen(source, timeout=8, phrase_time_limit=10)
     
     text = r.recognize_google(audio)
     print(text)
 except sr.WaitTimeoutError:
-    sys.stderr.write("TIMEOUT")
-except sr.UnknownValueError:
-    sys.stderr.write("UNINTELLIGIBLE")
-except Exception as e:
-    sys.stderr.write("ERROR:" + str(e))
+    pass
+except:
+    pass
 '@
+    }
     
     [System.IO.File]::WriteAllText($pyFile, $pyCode, [System.Text.Encoding]::UTF8)
     
     $proc = Start-Process -FilePath "python" -ArgumentList $pyFile `
         -PassThru -WindowStyle Hidden `
-        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+        -RedirectStandardOutput $outFile
     
-    # Show listening animation
-    $chars = @('.', '..', '...', '....', '.....')
-    for ($i = 0; $i -lt 24; $i++) {
-        if ($proc.HasExited) { break }
-        Write-Host "`r  Listening$($chars[$i % 5])   " -ForegroundColor Yellow -NoNewline
-        Start-Sleep -Milliseconds 500
-    }
-    Write-Host "`r                      " -NoNewline
-    Write-Host ""
-    
-    if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
-    
-    if (Test-Path $errFile) {
-        $err = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
-        if ($err -and $err.Trim()) { Write-Status "Voice: $($err.Trim())" "Info" }
-        Remove-Item $errFile -Force -ErrorAction SilentlyContinue
+    if ($Continuous) {
+        # Quick check for continuous mode
+        $proc.WaitForExit(15000)
+    } else {
+        # Animation for single listen
+        $chars = @('.', '..', '...', '....', '.....')
+        for ($i = 0; $i -lt 20; $i++) {
+            if ($proc.HasExited) { break }
+            Write-Host "`r  Listening$($chars[$i % 5])   " -ForegroundColor Yellow -NoNewline
+            Start-Sleep -Milliseconds 500
+        }
+        Write-Host "`r                      " -NoNewline
+        Write-Host ""
+        
+        if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
     }
     
     $result = $null
@@ -519,16 +512,15 @@ function Start-ChatInterface {
     Write-Header "SOFIE CHAT INTERFACE"
     
     Write-Host " Commands:" -ForegroundColor Gray
-    Write-Host "   /voice  - Voice input mode" -ForegroundColor Gray
+    Write-Host "   /voice  - Voice mode (continuous like Alexa/Siri)" -ForegroundColor Gray
     Write-Host "   /text   - Text input mode" -ForegroundColor Gray
-    Write-Host "   /mic    - Select microphone" -ForegroundColor Gray
     Write-Host "   /council - Convene Council" -ForegroundColor Gray
     Write-Host "   /status - Check services" -ForegroundColor Gray
     Write-Host "   /exit   - Exit" -ForegroundColor Gray
     Write-Host ""
     
     if ($script:VoiceEnabled) {
-        Write-Status "VOICE MODE ACTIVE" "Success"
+        Write-Status "VOICE MODE - Say 'Sofie' to wake, then speak" "Success"
         $script:VoiceMode = $true
     } else {
         Write-Status "TEXT MODE (voice unavailable)" "Warning"
@@ -538,19 +530,29 @@ function Start-ChatInterface {
     Write-Host ""
     
     while ($true) {
-        # Show prompt
         $userInput = $null
+        
         if ($script:VoiceMode -and $script:VoiceEnabled) {
+            # CONTINUOUS VOICE MODE - Like Alexa/Siri
             Write-Host ""
-            Write-Host "[VOICE] SPEAK NOW - Listening for up to 15 seconds..." -ForegroundColor Yellow
+            Write-Host "[VOICE] Listening... (say 'Sofie' or speak now)" -ForegroundColor Yellow
+            Write-Host "        Press Enter to type instead" -ForegroundColor Gray
+            
+            # Quick check for Enter key to switch to text
+            if ([Console]::KeyAvailable) {
+                $key = [Console]::ReadKey($true)
+                if ($key.Key -eq "Enter") {
+                    $script:VoiceMode = $false
+                    continue
+                }
+            }
             
             $voiceResult = Get-VoiceInput
             if ($voiceResult -and $voiceResult -is [string] -and $voiceResult.Trim()) {
                 $userInput = $voiceResult.Trim()
-                Write-Host "You said: $userInput" -ForegroundColor Green
+                Write-Host "You: $userInput" -ForegroundColor Green
             } else {
-                Write-Status "No speech detected" "Warning"
-                Write-Host "Type /text to switch to text mode or try speaking again" -ForegroundColor Gray
+                # No speech - just loop back to listening (continuous)
                 continue
             }
         } else {
@@ -570,7 +572,7 @@ function Start-ChatInterface {
         if ($userInput -eq "/voice") {
             if ($script:VoiceEnabled) {
                 $script:VoiceMode = $true
-                Write-Status "Voice mode ON" "Success"
+                Write-Status "Voice mode ON - Continuous listening" "Success"
             } else {
                 Write-Status "Voice not available" "Warning"
             }
@@ -580,11 +582,6 @@ function Start-ChatInterface {
         if ($userInput -eq "/text") {
             $script:VoiceMode = $false
             Write-Status "Text mode ON" "Info"
-            continue
-        }
-        
-        if ($userInput -eq "/mic") {
-            Select-Microphone
             continue
         }
         
@@ -602,12 +599,13 @@ function Start-ChatInterface {
             continue
         }
         
-        # Send to Sofie
-        Write-Host "Sofie: " -ForegroundColor Magenta -NoNewline
+        # Send to Sofie with thinking indicator
+        Write-Host "Sofie is thinking..." -ForegroundColor Magenta -NoNewline
         
         $response = Invoke-SofieChat -Message $userInput
         
-        Write-Host $response -ForegroundColor White
+        Write-Host "`r                    `r" -NoNewline
+        Write-Host "Sofie: $response" -ForegroundColor White
         
         if ($script:VoiceMode -and $script:VoiceEnabled) {
             Speak-Response -Text $response
