@@ -96,84 +96,90 @@ function Wait-ForService {
 }
 
 # ============================================================================
-# FFMPEG SETUP
+# VOICE DEPENDENCIES SETUP
 # ============================================================================
-function Install-Ffmpeg {
-    Write-Header "CHECKING FFMPEG"
+function Install-VoiceDeps {
+    Write-Header "CHECKING VOICE DEPENDENCIES"
     
-    # Check if ffmpeg already in PATH
+    # Check FFmpeg
     $ffmpegCmd = Get-Command ffmpeg -ErrorAction SilentlyContinue
-    if ($ffmpegCmd) {
-        Write-Status "FFmpeg found in PATH" "Success"
-        return $true
+    if (-not $ffmpegCmd) {
+        if (Test-Path "$LocalBin\ffmpeg.exe") {
+            $env:PATH = "$LocalBin;$env:PATH"
+            $ffmpegCmd = $true
+        }
     }
     
-    # Check local bin directory
-    if (Test-Path "$LocalBin\ffmpeg.exe") {
-        Write-Status "FFmpeg found in local bin" "Success"
-        $env:PATH = "$LocalBin;$env:PATH"
-        return $true
-    }
-    
-    Write-Status "FFmpeg not found - installing..." "Warning"
-    
-    # Ensure local bin exists
-    if (-not (Test-Path $LocalBin)) {
-        New-Item -ItemType Directory -Path $LocalBin -Force | Out-Null
-    }
-    
-    # Try winget with timeout
-    $winget = Get-Command winget -ErrorAction SilentlyContinue
-    if ($winget) {
-        Write-Status "Installing FFmpeg via winget (60 sec)..." "Info"
-        try {
-            $proc = Start-Process -FilePath "winget" `
-                -ArgumentList "install", "Gyan.FFmpeg", "-e", "--silent", "--accept-source-agreements", "--accept-package-agreements" `
-                -PassThru -WindowStyle Hidden
-            
-            $elapsed = 0
-            while ($elapsed -lt 60) {
-                Start-Sleep -Seconds 5
-                $elapsed += 5
+    if (-not $ffmpegCmd) {
+        Write-Status "FFmpeg not found - installing..." "Warning"
+        
+        if (-not (Test-Path $LocalBin)) {
+            New-Item -ItemType Directory -Path $LocalBin -Force | Out-Null
+        }
+        
+        # Quick winget try
+        $winget = Get-Command winget -ErrorAction SilentlyContinue
+        if ($winget) {
+            Write-Status "Installing FFmpeg via winget..." "Info"
+            try {
+                $proc = Start-Process -FilePath "winget" `
+                    -ArgumentList "install", "Gyan.FFmpeg", "-e", "--silent", "--accept-source-agreements", "--accept-package-agreements" `
+                    -PassThru -WindowStyle Hidden
                 
-                $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
-                if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
-                    Write-Status "FFmpeg installed" "Success"
-                    return $true
+                for ($i = 0; $i -lt 12; $i++) {
+                    Start-Sleep -Seconds 5
+                    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+                    if (Get-Command ffmpeg -ErrorAction SilentlyContinue) { break }
+                    if ($proc.HasExited) { break }
                 }
                 
-                if ($proc.HasExited) { break }
-            }
-            
-            if (-not $proc.HasExited) {
-                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-            }
-        } catch {
-            Write-Status "Winget failed, trying download..." "Warning"
+                if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+            } catch {}
+        }
+        
+        # Download if still not found
+        if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            try {
+                $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+                $zipPath = "$env:TEMP\ffmpeg.zip"
+                Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing -TimeoutSec 60
+                Expand-Archive -Path $zipPath -DestinationPath "$env:TEMP\ffmpeg" -Force
+                $ffmpegExe = Get-ChildItem -Path "$env:TEMP\ffmpeg" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+                if ($ffmpegExe) {
+                    Copy-Item -Path $ffmpegExe.FullName -Destination "$LocalBin\ffmpeg.exe" -Force
+                    $env:PATH = "$LocalBin;$env:PATH"
+                }
+            } catch {}
         }
     }
     
-    # Direct download
-    Write-Status "Downloading FFmpeg..." "Info"
+    # Check Python speech_recognition
+    Write-Status "Checking Python speech_recognition..." "Info"
     try {
-        $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-        $zipPath = "$env:TEMP\ffmpeg.zip"
-        $extractPath = "$env:TEMP\ffmpeg"
-        
-        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing -TimeoutSec 120
-        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-        
-        $ffmpegExe = Get-ChildItem -Path $extractPath -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
-        if ($ffmpegExe) {
-            Copy-Item -Path $ffmpegExe.FullName -Destination "$LocalBin\ffmpeg.exe" -Force
-            $env:PATH = "$LocalBin;$env:PATH"
-            Write-Status "FFmpeg ready" "Success"
+        $hasSR = python -c "import speech_recognition" 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Not installed" }
+        Write-Status "speech_recognition installed" "Success"
+    } catch {
+        Write-Status "Installing speech_recognition..." "Warning"
+        try {
+            python -m pip install SpeechRecognition pyaudio --quiet 2>&1 | Out-Null
+            Write-Status "speech_recognition installed" "Success"
+        } catch {
+            Write-Status "Failed to install speech_recognition" "Error"
+            return $false
+        }
+    }
+    
+    # Final check
+    try {
+        python -c "import speech_recognition; import pyaudio" 2>&1 | Out-Null
+        if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+            Write-Status "Voice dependencies ready" "Success"
             return $true
         }
-    } catch {
-        Write-Status "Download failed: $_" "Error"
-    }
+    } catch {}
     
+    Write-Status "Voice dependencies incomplete" "Warning"
     return $false
 }
 
@@ -391,29 +397,37 @@ function Get-VoiceInput {
     try {
         $pythonScript = @"
 import speech_recognition as sr
+import sys
 try:
     r = sr.Recognizer()
     with sr.Microphone() as source:
-        print("LISTENING...", flush=True)
         r.adjust_for_ambient_noise(source, duration=0.5)
-        audio = r.listen(source, timeout=10, phrase_time_limit=10)
+        try:
+            audio = r.listen(source, timeout=5, phrase_time_limit=5)
+        except sr.WaitTimeoutError:
+            sys.exit(0)
     try:
         text = r.recognize_google(audio)
-        print(f"RECOGNIZED: {text}")
+        print(text)
     except sr.UnknownValueError:
-        print("RECOGNIZED: ")
+        sys.exit(0)
     except sr.RequestError as e:
-        print(f"ERROR: {e}")
+        print(f"ERROR:{e}", file=sys.stderr)
+        sys.exit(1)
 except Exception as e:
-    print(f"ERROR: {e}")
+    print(f"ERROR:{e}", file=sys.stderr)
+    sys.exit(1)
 "@
         
-        $output = python -c $pythonScript 2>&1
+        $proc = Start-Process -FilePath "python" -ArgumentList "-c", $pythonScript `
+            -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\voice_out.txt" -RedirectStandardError "$env:TEMP\voice_err.txt"
         
-        foreach ($line in $output) {
-            if ($line -match "^RECOGNIZED: (.+)") {
-                return $matches[1]
-            }
+        $proc.WaitForExit(10000)
+        
+        if (Test-Path "$env:TEMP\voice_out.txt") {
+            $text = Get-Content "$env:TEMP\voice_out.txt" -Raw
+            Remove-Item "$env:TEMP\voice_out.txt" -Force -ErrorAction SilentlyContinue
+            return $text.Trim()
         }
         return $null
     } catch {
@@ -456,22 +470,17 @@ function Start-ChatInterface {
     while ($true) {
         # Show prompt
         if ($script:VoiceMode -and $script:VoiceEnabled) {
-            Write-Host "[VOICE] You: " -ForegroundColor Yellow -NoNewline
-        } else {
-            Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
-        }
-        
-        # Get input
-        $input = $null
-        if ($script:VoiceMode -and $script:VoiceEnabled) {
+            Write-Host "[VOICE] Listening... (speak now or press Enter to type)" -ForegroundColor Yellow
             $input = Get-VoiceInput
             if ($input) {
-                Write-Host $input -ForegroundColor White
+                Write-Host "You said: $input" -ForegroundColor White
             } else {
-                Write-Host "(no speech - use /text to type)" -ForegroundColor Gray
-                continue
+                $script:VoiceMode = $false
+                Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
+                $input = Read-Host
             }
         } else {
+            Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
             $input = Read-Host
         }
         
@@ -585,12 +594,12 @@ function Main {
         exit 1
     }
     
-    # Setup FFmpeg (unless -NoVoice flag)
+    # Setup voice dependencies (unless -NoVoice flag)
     if ($NoVoice) {
         Write-Status "Voice disabled by flag" "Info"
         $script:VoiceEnabled = $false
     } else {
-        $script:VoiceEnabled = Install-Ffmpeg
+        $script:VoiceEnabled = Install-VoiceDeps
     }
     
     if (-not $script:VoiceEnabled) {
