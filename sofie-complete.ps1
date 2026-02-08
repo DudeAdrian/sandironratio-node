@@ -166,7 +166,7 @@ except:
         $body = @{
             model = "llama3.1:8b"
             messages = @(
-                @{ role = "system"; content = "You are Sofie, sovereign AI of the 9 chambers. Speak with wisdom, sovereignty, and clarity. Keep responses concise (2-3 sentences max)." }
+                @{ role = "system"; content = "You are Sofie, a helpful AI assistant. You can only chat and answer questions. You cannot search the internet, access GitHub, execute commands, or perform real-world actions. Be honest about your limitations. Keep responses concise." }
                 @{ role = "user"; content = $msg }
             )
             stream = $false
