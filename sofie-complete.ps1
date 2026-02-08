@@ -18,17 +18,23 @@ try {
     python -m pip install SpeechRecognition pyaudio --quiet
 }
 
-# TTS Function
+# TTS Function - Female voice
 function Speak($text) {
     try {
-        $synth = New-Object -ComObject SAPI.SpVoice
-        $synth.Speak($text) | Out-Null
+        Add-Type -AssemblyName System.Speech
+        $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
+        # Select female voice
+        $voices = $synth.GetInstalledVoices()
+        $femaleVoice = $voices | Where-Object { $_.VoiceInfo.Gender -eq "Female" } | Select-Object -First 1
+        if ($femaleVoice) {
+            $synth.SelectVoice($femaleVoice.VoiceInfo.Name)
+        }
+        $synth.Speak($text)
     } catch {
-        # Fallback to PowerShell TTS
+        # Fallback
         try {
-            Add-Type -AssemblyName System.Speech
-            $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
-            $synth.Speak($text)
+            $synth = New-Object -ComObject SAPI.SpVoice
+            $synth.Speak($text) | Out-Null
         } catch {}
     }
 }
@@ -56,7 +62,7 @@ while ($true) {
     if ($voiceMode) {
         Write-Host "[Listening for wake word...]" -ForegroundColor DarkGray
         
-        # Listen with wake word detection
+        # Listen with wake word detection - longer phrase limit
         $out = "$env:TEMP\sofie_v.txt"
         @'
 import speech_recognition as sr
@@ -64,13 +70,13 @@ import sys
 
 try:
     r = sr.Recognizer()
-    r.energy_threshold = 300
-    r.pause_threshold = 0.8
+    r.energy_threshold = 250
+    r.pause_threshold = 2.0  # Longer pause allowed between words
     
     with sr.Microphone() as source:
         r.adjust_for_ambient_noise(source, duration=0.5)
-        # Listen for wake word + command
-        audio = r.listen(source, timeout=10, phrase_time_limit=15)
+        # Listen for longer - 30 seconds max phrase
+        audio = r.listen(source, timeout=10, phrase_time_limit=30)
     
     text = r.recognize_google(audio).lower()
     
@@ -93,9 +99,9 @@ except:
         
         $p = Start-Process python -ArgumentList "$env:TEMP\sofie_v.py" -PassThru -WindowStyle Hidden -RedirectStandardOutput $out
         
-        # Show waiting
+        # Show waiting - wait up to 35 seconds (longer than phrase limit)
         $dots = 0
-        while (-not $p.HasExited -and $dots -lt 30) {
+        while (-not $p.HasExited -and $dots -lt 70) {
             Write-Host "." -NoNewline -ForegroundColor Yellow
             Start-Sleep -Milliseconds 500
             $dots++
