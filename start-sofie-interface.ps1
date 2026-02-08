@@ -246,7 +246,9 @@ function Start-SofieService {
         New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
     }
     
-    $logFile = "$LogDir\sofie_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $logFileOut = "$LogDir\sofie_$timestamp.log"
+    $logFileErr = "$LogDir\sofie_$timestamp.err.log"
     
     # Check for main.py
     $mainPy = "$SofieDir\src\main.py"
@@ -260,7 +262,7 @@ function Start-SofieService {
     }
     
     Write-Status "Starting Sofie from: $mainPy" "Info"
-    Write-Status "Logs: $logFile" "Info"
+    Write-Status "Logs: $logFileOut" "Info"
     
     try {
         # Set environment
@@ -268,12 +270,12 @@ function Start-SofieService {
         $env:OLLAMA_MODEL = "llama3.1:8b"
         $env:ENABLE_VOICE_INTERFACE = "true"
         
-        # Start Sofie minimized
+        # Start Sofie minimized (separate stdout/stderr files)
         $script:SofieProcess = Start-Process -FilePath "python" `
             -ArgumentList "`"$mainPy`"" `
             -WorkingDirectory $SofieDir `
-            -RedirectStandardOutput $logFile `
-            -RedirectStandardError $logFile `
+            -RedirectStandardOutput $logFileOut `
+            -RedirectStandardError $logFileErr `
             -PassThru -WindowStyle Minimized
         
         Write-Status "Sofie starting (PID: $($script:SofieProcess.Id))..." "Info"
@@ -321,13 +323,15 @@ function Start-Council {
     if (-not (Test-Port -Port $HivePort)) {
         Write-Status "Starting Hive (Terracare Ledger)..." "Info"
         
-        $logFile = "$LogDir\hive_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+        $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+        $logFileOut = "$LogDir\hive_$timestamp.log"
+        $logFileErr = "$LogDir\hive_$timestamp.err.log"
         try {
             $script:HiveProcess = Start-Process -FilePath "npx" `
                 -ArgumentList "tsx", "watch", "awaken.ts" `
                 -WorkingDirectory $BaseDir `
-                -RedirectStandardOutput $logFile `
-                -RedirectStandardError $logFile `
+                -RedirectStandardOutput $logFileOut `
+                -RedirectStandardError $logFileErr `
                 -PassThru -WindowStyle Minimized
             
             Wait-ForService -Name "Hive" -Port $HivePort -MaxAttempts 20
@@ -342,7 +346,9 @@ function Start-Council {
     if (-not (Test-Port -Port $CouncilPort)) {
         Write-Status "Starting Council (6 Agents)..." "Info"
         
-        $logFile = "$LogDir\council_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+        $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+        $logFileOut = "$LogDir\council_$timestamp.log"
+        $logFileErr = "$LogDir\council_$timestamp.err.log"
         try {
             # Try different entry points
             $councilPath = "$BaseDir\src\council\api_server.py"
@@ -350,8 +356,8 @@ function Start-Council {
                 $script:CouncilProcess = Start-Process -FilePath "python" `
                     -ArgumentList "-m", "src.council.api_server" `
                     -WorkingDirectory $BaseDir `
-                    -RedirectStandardOutput $logFile `
-                    -RedirectStandardError $logFile `
+                    -RedirectStandardOutput $logFileOut `
+                    -RedirectStandardError $logFileErr `
                     -PassThru -WindowStyle Minimized
             } else {
                 Write-Status "Council entry point not found - may need manual start" "Warning"
