@@ -410,52 +410,77 @@ function Test-Microphone {
     }
 }
 
+function Select-Microphone {
+    $pyFile = "$env:TEMP\listmics_$([Guid]::NewGuid().ToString().Substring(0,8)).py"
+    $outFile = "$env:TEMP\mics_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
+    
+    @'
+import speech_recognition as sr
+mics = sr.Microphone.list_microphone_names()
+for i, name in enumerate(mics):
+    print(f"{i}: {name}")
+'@ | Out-File -FilePath $pyFile -Encoding UTF8
+    
+    Start-Process -FilePath "python" -ArgumentList $pyFile `
+        -Wait -WindowStyle Hidden -RedirectStandardOutput $outFile
+    
+    $mics = Get-Content $outFile -ErrorAction SilentlyContinue
+    Remove-Item $pyFile, $outFile -Force -ErrorAction SilentlyContinue
+    
+    Write-Host ""
+    Write-Host "Available microphones:" -ForegroundColor Cyan
+    $mics | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+    Write-Host ""
+    
+    $selection = Read-Host "Enter microphone number (or press Enter for default)"
+    if ($selection -match '^\d+$') {
+        return [int]$selection
+    }
+    return $null
+}
+
 function Get-VoiceInput {
+    param([int]$MicIndex = $null)
+    
     $outFile = "$env:TEMP\voice_out_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
     $errFile = "$env:TEMP\voice_err_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
     $pyFile = "$env:TEMP\voice_$([Guid]::NewGuid().ToString().Substring(0,8)).py"
     
-    # Write Python script to file - lower threshold, list mics if needed
-    $pyCode = @'
+    # Build Python script with optional mic selection
+    $micLine = if ($MicIndex -ne $null) { "with sr.Microphone(device_index=$MicIndex) as source:" } else { "with sr.Microphone() as source:" }
+    
+    $pyCode = @"
 import speech_recognition as sr
 import sys
 
 try:
     r = sr.Recognizer()
-    # Very low threshold to catch quiet speech
-    r.energy_threshold = 200
+    r.energy_threshold = 150
     r.dynamic_energy_threshold = True
     r.pause_threshold = 1.0
     
-    # List microphones for debugging
-    mics = sr.Microphone.list_microphone_names()
-    sys.stderr.write(f"Mics found: {len(mics)}\n")
-    
-    with sr.Microphone() as source:
-        sys.stderr.write("Adjusting for ambient noise...\n")
-        r.adjust_for_ambient_noise(source, duration=1)
-        sys.stderr.write(f"Energy threshold: {r.energy_threshold}\n")
-        sys.stderr.write("Listening...\n")
-        audio = r.listen(source, timeout=10, phrase_time_limit=15)
+    $micLine
+    r.adjust_for_ambient_noise(source, duration=1)
+    sys.stderr.write(f"Threshold: {r.energy_threshold}\n")
+    audio = r.listen(source, timeout=10, phrase_time_limit=15)
     
     text = r.recognize_google(audio)
     print(text)
 except sr.WaitTimeoutError:
-    sys.stderr.write("TIMEOUT: No speech detected within timeout\n")
+    sys.stderr.write("TIMEOUT\n")
 except sr.UnknownValueError:
-    sys.stderr.write("UNINTELLIGIBLE: Speech detected but could not understand\n")
+    sys.stderr.write("UNINTELLIGIBLE\n")
 except Exception as e:
     sys.stderr.write(f"ERROR: {e}\n")
-'@
+"@
     
     [System.IO.File]::WriteAllText($pyFile, $pyCode, [System.Text.Encoding]::UTF8)
     
-    # Run Python script
     $proc = Start-Process -FilePath "python" -ArgumentList $pyFile `
         -PassThru -WindowStyle Hidden `
         -RedirectStandardOutput $outFile -RedirectStandardError $errFile
     
-    # Show listening animation
+    # Animation
     $chars = @('.', '..', '...', '....', '.....')
     for ($i = 0; $i -lt 30; $i++) {
         if ($proc.HasExited) { break }
@@ -465,21 +490,14 @@ except Exception as e:
     Write-Host "`r                      " -NoNewline
     Write-Host ""
     
-    # Kill if still running
-    if (-not $proc.HasExited) { 
-        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue 
-    }
+    if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
     
-    # Show debug info from stderr
     if (Test-Path $errFile) {
         $err = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
-        if ($err) {
-            Write-Status "Voice debug: $($err.Trim())" "Info"
-        }
+        if ($err) { Write-Status "Voice: $($err.Trim())" "Info" }
         Remove-Item $errFile -Force -ErrorAction SilentlyContinue
     }
     
-    # Get result
     $result = $null
     if (Test-Path $outFile) {
         $text = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
@@ -508,6 +526,7 @@ function Start-ChatInterface {
     Write-Host " Commands:" -ForegroundColor Gray
     Write-Host "   /voice  - Voice input mode" -ForegroundColor Gray
     Write-Host "   /text   - Text input mode" -ForegroundColor Gray
+    Write-Host "   /mic    - Select microphone" -ForegroundColor Gray
     Write-Host "   /council - Convene Council" -ForegroundColor Gray
     Write-Host "   /status - Check services" -ForegroundColor Gray
     Write-Host "   /exit   - Exit" -ForegroundColor Gray
@@ -566,6 +585,11 @@ function Start-ChatInterface {
         if ($userInput -eq "/text") {
             $script:VoiceMode = $false
             Write-Status "Text mode ON" "Info"
+            continue
+        }
+        
+        if ($userInput -eq "/mic") {
+            Select-Microphone
             continue
         }
         
