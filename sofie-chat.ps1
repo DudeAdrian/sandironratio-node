@@ -446,10 +446,9 @@ function Get-VoiceInput {
     $errFile = "$env:TEMP\voice_err_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
     $pyFile = "$env:TEMP\voice_$([Guid]::NewGuid().ToString().Substring(0,8)).py"
     
-    # Build Python script with optional mic selection
-    $micLine = if ($MicIndex -ne $null) { "with sr.Microphone(device_index=$MicIndex) as source:" } else { "with sr.Microphone() as source:" }
-    
-    $pyCode = @"
+    # Build Python script - proper indentation is critical
+    if ($MicIndex -ne $null) {
+        $pyCode = @"
 import speech_recognition as sr
 import sys
 
@@ -458,12 +457,10 @@ try:
     r.energy_threshold = 150
     r.dynamic_energy_threshold = True
     r.pause_threshold = 1.0
-    
-    $micLine
-    r.adjust_for_ambient_noise(source, duration=1)
-    sys.stderr.write(f"Threshold: {r.energy_threshold}\n")
-    audio = r.listen(source, timeout=10, phrase_time_limit=15)
-    
+    with sr.Microphone(device_index=$MicIndex) as source:
+        r.adjust_for_ambient_noise(source, duration=1)
+        sys.stderr.write(f"Threshold: {r.energy_threshold}\n")
+        audio = r.listen(source, timeout=10, phrase_time_limit=15)
     text = r.recognize_google(audio)
     print(text)
 except sr.WaitTimeoutError:
@@ -473,6 +470,30 @@ except sr.UnknownValueError:
 except Exception as e:
     sys.stderr.write(f"ERROR: {e}\n")
 "@
+    } else {
+        $pyCode = @"
+import speech_recognition as sr
+import sys
+
+try:
+    r = sr.Recognizer()
+    r.energy_threshold = 150
+    r.dynamic_energy_threshold = True
+    r.pause_threshold = 1.0
+    with sr.Microphone() as source:
+        r.adjust_for_ambient_noise(source, duration=1)
+        sys.stderr.write(f"Threshold: {r.energy_threshold}\n")
+        audio = r.listen(source, timeout=10, phrase_time_limit=15)
+    text = r.recognize_google(audio)
+    print(text)
+except sr.WaitTimeoutError:
+    sys.stderr.write("TIMEOUT\n")
+except sr.UnknownValueError:
+    sys.stderr.write("UNINTELLIGIBLE\n")
+except Exception as e:
+    sys.stderr.write(f"ERROR: {e}\n")
+"@
+    }
     
     [System.IO.File]::WriteAllText($pyFile, $pyCode, [System.Text.Encoding]::UTF8)
     
