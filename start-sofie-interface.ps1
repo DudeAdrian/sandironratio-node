@@ -19,6 +19,7 @@ $script:SofieProcess = $null
 $script:HiveProcess = $null
 $script:CouncilProcess = $null
 $script:VoiceEnabled = $false
+$script:VoiceMode = $true  # Default to voice mode
 $script:ChatHistory = @()
 
 # ============================================================================
@@ -127,47 +128,65 @@ function Install-Ffmpeg {
         New-Item -ItemType Directory -Path $LocalBin -Force | Out-Null
     }
     
-    # Try winget first (Windows 10/11) with timeout
+    # Try winget first (Windows 10/11) - background install with shorter timeout
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if ($winget) {
-        Write-Status "Installing FFmpeg via winget (this may take 2-3 minutes)..." "Info"
-        Write-Status "Press Ctrl+C to skip and use text mode only" "Info"
+        Write-Status "Installing FFmpeg via winget (60 sec timeout)..." "Info"
         try {
-            # Use -h 0 to hide progress and --silent for no prompts
+            # Start winget in background
             $proc = Start-Process -FilePath "winget" `
                 -ArgumentList "install", "Gyan.FFmpeg", "-e", "--silent", "--accept-source-agreements", "--accept-package-agreements" `
                 -PassThru -WindowStyle Hidden
             
-            # Wait with timeout (3 minutes max)
-            $timeout = 180
-            $proc.WaitForExit($timeout * 1000)
-            
-            if (-not $proc.HasExited) {
-                Write-Status "Winget install timed out, stopping..." "Warning"
-                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-                throw "Timeout"
+            # Quick check loop - wait up to 60 seconds
+            $maxWait = 60
+            $elapsed = 0
+            while ($elapsed -lt $maxWait) {
+                Start-Sleep -Seconds 5
+                $elapsed += 5
+                
+                # Check if ffmpeg is now available (install succeeded)
+                $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+                if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+                    Write-Status "FFmpeg installed successfully" "Success"
+                    return $true
+                }
+                
+                # Check if process exited
+                if ($proc.HasExited) {
+                    if ($proc.ExitCode -eq 0) {
+                        # Refresh PATH and check again
+                        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+                        if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+                            Write-Status "FFmpeg installed via winget" "Success"
+                            return $true
+                        }
+                    }
+                    break
+                }
             }
             
-            # Refresh PATH
-            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
-            
-            if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
-                Write-Status "FFmpeg installed via winget" "Success"
-                return $true
+            # Kill process if still running
+            if (-not $proc.HasExited) {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
             }
         } catch {
-            Write-Status "Winget install failed or skipped, trying direct download..." "Warning"
+            Write-Status "Winget install failed, trying direct download..." "Warning"
         }
     }
     
-    # Direct download fallback
-    Write-Status "Downloading FFmpeg (please wait)..." "Info"
+    # Direct download fallback (faster but larger download)
+    Write-Status "Downloading FFmpeg essentials (30MB)..." "Info"
     try {
         $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
         $zipPath = "$env:TEMP\ffmpeg.zip"
         $extractPath = "$env:TEMP\ffmpeg"
         
-        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+        # Download with progress
+        $ProgressPreference = "Continue"
+        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing -TimeoutSec 120
+        
+        Write-Status "Extracting FFmpeg..." "Info"
         Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
         
         # Find ffmpeg.exe and copy to local bin
@@ -175,14 +194,14 @@ function Install-Ffmpeg {
         if ($ffmpegExe) {
             Copy-Item -Path $ffmpegExe.FullName -Destination "$LocalBin\ffmpeg.exe" -Force
             $env:PATH = "$LocalBin;$env:PATH"
-            Write-Status "FFmpeg downloaded to local bin" "Success"
+            Write-Status "FFmpeg ready" "Success"
             return $true
         }
     } catch {
         Write-Status "Failed to download FFmpeg: $_" "Error"
     }
     
-    Write-Status "Voice disabled - text mode only" "Warning"
+    Write-Status "FFmpeg not available" "Warning"
     return $false
 }
 
@@ -483,37 +502,39 @@ function Start-ChatInterface {
     Write-Header "SOFIE CHAT INTERFACE"
     
     Write-Host " Commands:" -ForegroundColor Gray
-    Write-Host "   Type your message - Chat with Sofie" -ForegroundColor Gray
-    Write-Host "   /voice           - Toggle voice input mode" -ForegroundColor Gray
+    Write-Host "   /voice           - Toggle voice input (DEFAULT: VOICE IS ON)" -ForegroundColor Gray
+    Write-Host "   /text            - Switch to text-only mode" -ForegroundColor Gray
     Write-Host "   /council         - Convene Council (Hive + 6 Agents)" -ForegroundColor Gray
     Write-Host "   /status          - Check service status" -ForegroundColor Gray
     Write-Host "   /exit or /quit   - Exit" -ForegroundColor Gray
     Write-Host ""
     
     if ($script:VoiceEnabled) {
-        Write-Status "Voice input available (say 'Sofie' to activate)" "Success"
+        Write-Status "VOICE MODE ACTIVE - Speak your messages" "Success"
+        $voiceMode = $true
+    } else {
+        Write-Status "TEXT MODE - Voice unavailable (FFmpeg not installed)" "Warning"
+        $voiceMode = $false
     }
     
     Write-Host ""
     
-    $voiceMode = $false
-    
     while ($true) {
-        # Show prompt
-        if ($voiceMode) {
-            Write-Host "[VOICE] " -ForegroundColor Yellow -NoNewline
+        # Show prompt based on mode
+        if ($script:VoiceMode -and $script:VoiceEnabled) {
+            Write-Host "[VOICE] You: " -ForegroundColor Yellow -NoNewline
+        } else {
+            Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
         }
-        Write-Host "You: " -ForegroundColor Cyan -NoNewline
         
         # Get input
         $input = $null
-        if ($voiceMode) {
+        if ($script:VoiceMode -and $script:VoiceEnabled) {
             $input = Get-VoiceInput
             if ($input) {
                 Write-Host $input -ForegroundColor White
             } else {
-                Write-Host "(no speech detected)" -ForegroundColor Gray
-                $voiceMode = $false
+                Write-Host "(no speech detected - use /text to type)" -ForegroundColor Gray
                 continue
             }
         } else {
@@ -530,11 +551,17 @@ function Start-ChatInterface {
         
         if ($input -eq "/voice") {
             if ($script:VoiceEnabled) {
-                $voiceMode = -not $voiceMode
-                Write-Status "Voice mode: $(if($voiceMode){'ON'}else{'OFF'})" "Info"
+                $script:VoiceMode = $true
+                Write-Status "Voice mode: ON - Speak your message" "Success"
             } else {
-                Write-Status "Voice not available - install speech_recognition" "Warning"
+                Write-Status "Voice not available - FFmpeg not installed" "Warning"
             }
+            continue
+        }
+        
+        if ($input -eq "/text") {
+            $script:VoiceMode = $false
+            Write-Status "Text mode: ON - Type your message" "Info"
             continue
         }
         
@@ -560,7 +587,7 @@ function Start-ChatInterface {
         Write-Host $response -ForegroundColor White
         
         # Speak if in voice mode
-        if ($voiceMode) {
+        if ($script:VoiceMode -and $script:VoiceEnabled) {
             Speak-Response -Text $response
         }
         
@@ -619,44 +646,27 @@ function Stop-AllServices {
 # MAIN ENTRY
 # ============================================================================
 function Main {
-    param([switch]$NoVoice)
-    
     $ErrorActionPreference = "Continue"
     
     Clear-Host
     Write-Header "SOFIE INTERFACE v2.0"
-    Write-Host "  Real AI Chat | Voice + Text | Council Control" -ForegroundColor Gray
-    
-    # Check for -NoVoice flag or prompt
-    $skipVoice = $NoVoice
-    if (-not $skipVoice) {
-        Write-Host ""
-        Write-Host "Voice support requires FFmpeg (installs automatically)." -ForegroundColor Gray
-        $choice = Read-Host "Enable voice? (Y/n/never)"
-        if ($choice -eq "n" -or $choice -eq "N") {
-            $skipVoice = $true
-        }
-        if ($choice -eq "never") {
-            # Create flag file to remember choice
-            "skip-voice" | Out-File -FilePath "$BaseDir\.voice-disabled" -Force
-            $skipVoice = $true
-        }
-    }
-    if (Test-Path "$BaseDir\.voice-disabled") {
-        $skipVoice = $true
-    }
+    Write-Host "  Voice + Text AI | Council Control | Real-time Chat" -ForegroundColor Gray
     
     # 1. Check Ollama
     if (-not (Test-Ollama)) {
         exit 1
     }
     
-    # 2. Setup FFmpeg for voice (if not skipped)
-    if ($skipVoice) {
-        Write-Status "Voice disabled - text mode only" "Info"
-        $script:VoiceEnabled = $false
-    } else {
-        $script:VoiceEnabled = Install-Ffmpeg
+    # 2. Setup FFmpeg for voice (REQUIRED - voice is the default mode)
+    $script:VoiceEnabled = Install-Ffmpeg
+    
+    if (-not $script:VoiceEnabled) {
+        Write-Status "WARNING: Voice input unavailable - text mode only" "Warning"
+        Write-Status "To enable voice, install FFmpeg manually:" "Info"
+        Write-Status "  winget install Gyan.FFmpeg" "Info"
+        Write-Host ""
+        Write-Host "Continuing with TEXT MODE ONLY..." -ForegroundColor Yellow
+        Write-Host ""
     }
     
     # 3. Start Sofie
@@ -675,9 +685,7 @@ function Main {
 
 # Handle Ctrl+C
 try {
-    # Parse arguments
-    $noVoiceFlag = $args -contains "-NoVoice" -or $args -contains "--no-voice" -or $args -contains "/novoice"
-    Main -NoVoice:$noVoiceFlag
+    Main
 } catch {
     Write-Status "Error: $_" "Error"
 } finally {
