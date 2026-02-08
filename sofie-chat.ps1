@@ -411,76 +411,59 @@ function Test-Microphone {
 }
 
 function Get-VoiceInput {
-    $outFile = "$env:TEMP\voice_out_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
+    # Create temp files with unique names
+    $baseName = "voice_$(Get-Date -Format 'HHmmss')_$([System.Random]::new().Next(1000,9999))"
+    $outFile = "$env:TEMP\$baseName.txt"
     
-    try {
-        # Create Python script file instead of inline (more reliable)
-        $pyFile = "$env:TEMP\voice_listen_$([Guid]::NewGuid().ToString().Substring(0,8)).py"
-        @"
+    # Create Python script
+    $pyFile = "$env:TEMP\$baseName.py"
+    @"
 import speech_recognition as sr
 import sys
 
 try:
     r = sr.Recognizer()
     with sr.Microphone() as source:
-        # Quick ambient noise adjustment
-        r.adjust_for_ambient_noise(source, duration=0.3)
-        # Listen for up to 5 seconds
-        audio = r.listen(source, timeout=5, phrase_time_limit=5)
+        r.adjust_for_ambient_noise(source, duration=0.5)
+        # Listen for speech with 5 second timeout
+        audio = r.listen(source, timeout=5, phrase_time_limit=10)
     
-    # Recognize using Google (requires internet)
+    # Use Google Speech Recognition
     text = r.recognize_google(audio)
-    if text:
-        print(text.strip())
-        sys.exit(0)
-    else:
-        sys.exit(1)
-        
+    print(text)
+    
 except sr.WaitTimeoutError:
-    # No speech detected in timeout period
-    sys.exit(2)
+    pass  # No speech detected
 except sr.UnknownValueError:
-    # Speech detected but couldn't understand
-    sys.exit(3)
+    pass  # Could not understand audio
 except Exception as e:
-    print(f"ERROR:{e}", file=sys.stderr)
-    sys.exit(1)
-"@ | Out-File -FilePath $pyFile -Encoding UTF8
-        
-        # Run the Python script
-        $proc = Start-Process -FilePath "python" -ArgumentList $pyFile `
-            -PassThru -WindowStyle Hidden `
-            -RedirectStandardOutput $outFile
-        
-        # Show countdown
-        for ($i = 0; $i -lt 10; $i++) {
-            if ($proc.HasExited) { break }
-            Start-Sleep -Milliseconds 500
+    print(f"Error: {e}", file=sys.stderr)
+"@ | Out-File -FilePath $pyFile -Encoding UTF8 -Force
+    
+    # Run Python and wait for it to complete
+    $proc = Start-Process -FilePath "python" -ArgumentList $pyFile -PassThru -WindowStyle Hidden -RedirectStandardOutput $outFile
+    
+    # Wait up to 8 seconds for speech
+    $proc.WaitForExit(8000)
+    
+    # Force kill if still running
+    if (-not $proc.HasExited) {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }
+    
+    # Get the result
+    $result = $null
+    if (Test-Path $outFile) {
+        $content = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
+        if ($content) {
+            $result = $content.Trim()
         }
-        
-        # If still running after 5 seconds, kill it
-        if (-not $proc.HasExited) {
-            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-        }
-        
-        # Read result
-        $result = $null
-        if (Test-Path $outFile) {
-            $content = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
-            if ($content) {
-                $result = $content.Trim()
-            }
-        }
-        
-        # Cleanup
-        Remove-Item $pyFile -Force -ErrorAction SilentlyContinue
         Remove-Item $outFile -Force -ErrorAction SilentlyContinue
-        
-        return $result
     }
-    catch {
-        return $null
-    }
+    
+    Remove-Item $pyFile -Force -ErrorAction SilentlyContinue
+    
+    return $result
 }
 
 function Speak-Response {
