@@ -412,31 +412,40 @@ function Test-Microphone {
 
 function Get-VoiceInput {
     $outFile = "$env:TEMP\voice_out_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
+    $errFile = "$env:TEMP\voice_err_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
     $pyFile = "$env:TEMP\voice_$([Guid]::NewGuid().ToString().Substring(0,8)).py"
     
-    # Write Python script to file
+    # Write Python script to file - lower threshold, list mics if needed
     $pyCode = @'
 import speech_recognition as sr
 import sys
 
 try:
     r = sr.Recognizer()
-    r.energy_threshold = 300  # Lower threshold for quieter speech
+    # Very low threshold to catch quiet speech
+    r.energy_threshold = 200
     r.dynamic_energy_threshold = True
-    r.pause_threshold = 0.8   # Shorter pause between words
+    r.pause_threshold = 1.0
+    
+    # List microphones for debugging
+    mics = sr.Microphone.list_microphone_names()
+    sys.stderr.write(f"Mics found: {len(mics)}\n")
     
     with sr.Microphone() as source:
+        sys.stderr.write("Adjusting for ambient noise...\n")
         r.adjust_for_ambient_noise(source, duration=1)
+        sys.stderr.write(f"Energy threshold: {r.energy_threshold}\n")
+        sys.stderr.write("Listening...\n")
         audio = r.listen(source, timeout=10, phrase_time_limit=15)
     
     text = r.recognize_google(audio)
     print(text)
 except sr.WaitTimeoutError:
-    sys.stderr.write("TIMEOUT")
+    sys.stderr.write("TIMEOUT: No speech detected within timeout\n")
 except sr.UnknownValueError:
-    sys.stderr.write("UNINTELLIGIBLE")
+    sys.stderr.write("UNINTELLIGIBLE: Speech detected but could not understand\n")
 except Exception as e:
-    sys.stderr.write("ERROR: " + str(e))
+    sys.stderr.write(f"ERROR: {e}\n")
 '@
     
     [System.IO.File]::WriteAllText($pyFile, $pyCode, [System.Text.Encoding]::UTF8)
@@ -444,9 +453,9 @@ except Exception as e:
     # Run Python script
     $proc = Start-Process -FilePath "python" -ArgumentList $pyFile `
         -PassThru -WindowStyle Hidden `
-        -RedirectStandardOutput $outFile
+        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
     
-    # Show listening animation for up to 15 seconds
+    # Show listening animation
     $chars = @('.', '..', '...', '....', '.....')
     for ($i = 0; $i -lt 30; $i++) {
         if ($proc.HasExited) { break }
@@ -459,6 +468,15 @@ except Exception as e:
     # Kill if still running
     if (-not $proc.HasExited) { 
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue 
+    }
+    
+    # Show debug info from stderr
+    if (Test-Path $errFile) {
+        $err = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
+        if ($err) {
+            Write-Status "Voice debug: $($err.Trim())" "Info"
+        }
+        Remove-Item $errFile -Force -ErrorAction SilentlyContinue
     }
     
     # Get result
