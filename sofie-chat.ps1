@@ -411,10 +411,12 @@ function Test-Microphone {
 }
 
 function Get-VoiceInput {
-    $outFile = "$env:TEMP\voice_$(Get-Random).txt"
-    $errFile = "$env:TEMP\voice_err_$(Get-Random).txt"
+    $outFile = "$env:TEMP\voice_out_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
+    $errFile = "$env:TEMP\voice_err_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
+    $pyFile = "$env:TEMP\voice_$([Guid]::NewGuid().ToString().Substring(0,8)).py"
     
-    $pyScript = @"
+    # Write Python script to file (avoid multiline string issues)
+    $pyCode = @'
 import speech_recognition as sr
 import sys
 
@@ -426,23 +428,27 @@ try:
     text = r.recognize_google(audio)
     print(text)
 except sr.WaitTimeoutError:
-    print("TIMEOUT: No speech", file=sys.stderr)
+    sys.stderr.write("TIMEOUT: No speech detected")
 except sr.UnknownValueError:
-    print("ERR: Could not understand", file=sys.stderr)
+    sys.stderr.write("ERR: Could not understand audio")
 except Exception as e:
-    print(f"ERR: {e}", file=sys.stderr)
-"@
+    sys.stderr.write("ERR: " + str(e))
+'@
     
-    $proc = Start-Process -FilePath "python" -ArgumentList "-c", $pyScript `
+    [System.IO.File]::WriteAllText($pyFile, $pyCode, [System.Text.Encoding]::UTF8)
+    
+    # Run Python script
+    $proc = Start-Process -FilePath "python" -ArgumentList $pyFile `
         -PassThru -WindowStyle Hidden `
         -RedirectStandardOutput $outFile -RedirectStandardError $errFile
     
-    # Wait for process to complete (max 10 sec)
+    # Wait max 10 seconds
     $proc.WaitForExit(10000)
     if (-not $proc.HasExited) { 
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue 
     }
     
+    # Get result
     $result = $null
     if (Test-Path $outFile) {
         $text = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
@@ -450,15 +456,16 @@ except Exception as e:
         Remove-Item $outFile -Force -ErrorAction SilentlyContinue
     }
     
-    # Debug: show errors
+    # Debug output
     if (Test-Path $errFile) {
         $err = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
         if ($err -and $err.Trim()) {
-            Write-Status "Voice debug: $($err.Trim())" "Info"
+            Write-Status "Voice: $($err.Trim())" "Info"
         }
         Remove-Item $errFile -Force -ErrorAction SilentlyContinue
     }
     
+    Remove-Item $pyFile -Force -ErrorAction SilentlyContinue
     return $result
 }
 
