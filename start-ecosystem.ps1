@@ -1,298 +1,237 @@
-# SandIronRatio Ecosystem Launcher
-# Simple inline script - NO functions, NO Unicode, ASCII only
+# SandIronRatio Progressive Activation Launcher
+# ASCII ONLY - NO functions - User-controlled activation sequence
 
 # ============================================================================
-# CONFIGURATION
+# PHASE 1: PREREQUISITES
 # ============================================================================
-$BaseDir = "C:\Users\squat\repos\sandironratio-node"
-$SofieDir = "C:\Users\squat\repos\sofie-llama-backend"
-$GitHubToken = $env:GITHUB_TOKEN
-
-# Process trackers
-$ollamaProc = $null
-$hiveProc = $null
-$sofieProc = $null
-$councilProc = $null
-
-# ============================================================================
-# CLEAR SCREEN AND SHOW HEADER
-# ============================================================================
-Clear-Host
+Write-Host ""
 Write-Host "==================================================="
-Write-Host "    SANDIRONRATIO ECOSYSTEM LAUNCHER"
-Write-Host "    The Dude <-> Council <-> Sofie <-> Hive"
+Write-Host "    SANDIRONRATIO PROGRESSIVE ACTIVATION"
 Write-Host "==================================================="
 Write-Host ""
 
-# ============================================================================
-# CHECK OLLAMA
-# ============================================================================
-Write-Host "Checking Ollama... " -NoNewline
+# Check Ollama running
+Write-Host "Checking Ollama prerequisite..." -ForegroundColor White
 $ollamaOK = $false
 try {
     Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -UseBasicParsing -TimeoutSec 2 | Out-Null
     $ollamaOK = $true
-    Write-Host "ALREADY RUNNING" -ForegroundColor Green
+    Write-Host "Ollama: OK" -ForegroundColor Green
 } catch {
-    Write-Host "STARTING..." -ForegroundColor Yellow
-    try {
-        $ollamaProc = Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden -PassThru
-        Start-Sleep -Seconds 3
-        Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -UseBasicParsing -TimeoutSec 2 | Out-Null
-        $ollamaOK = $true
-        Write-Host "  Ollama ready" -ForegroundColor Green
-    } catch {
-        Write-Host "  FAILED to start Ollama" -ForegroundColor Red
-    }
+    Write-Host "ERROR: Ollama not running. Start it first: ollama serve" -ForegroundColor Red
+    Write-Host ""
+    exit
 }
 
 # ============================================================================
-# START HIVE
-# ============================================================================
-Write-Host "Starting Hive... " -NoNewline
-$hiveOK = $false
-try {
-    Invoke-RestMethod -Uri "http://localhost:3000/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
-    $hiveOK = $true
-    Write-Host "ALREADY RUNNING" -ForegroundColor Green
-} catch {
-    $hiveCmd = "cd `"$BaseDir`"; `$env:NODE_ENV='development'; npm run dev"
-    $hiveProc = Start-Process -FilePath "powershell" -ArgumentList "-Command", $hiveCmd -WindowStyle Hidden -PassThru
-    
-    for ($i = 0; $i -lt 30; $i++) {
-        Start-Sleep -Milliseconds 500
-        try {
-            Invoke-RestMethod -Uri "http://localhost:3000/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
-            $hiveOK = $true
-            break
-        } catch {}
-    }
-    
-    if ($hiveOK) {
-        Write-Host "READY on port 3000" -ForegroundColor Green
-    } else {
-        Write-Host "TIMEOUT" -ForegroundColor Red
-    }
-}
-
-# ============================================================================
-# START SOFIE
-# ============================================================================
-Write-Host "Starting Sofie... " -NoNewline
-$sofieOK = $false
-try {
-    Invoke-RestMethod -Uri "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
-    $sofieOK = $true
-    Write-Host "ALREADY RUNNING" -ForegroundColor Green
-} catch {
-    $sofieCmd = "cd `"$SofieDir`"; `$env:USE_OLLAMA='true'; `$env:OLLAMA_MODEL='llama3.1:8b'; `$env:HIVE_API_URL='http://localhost:3000'; `$env:GITHUB_TOKEN='$GitHubToken'; python src/main.py --mode=chief"
-    $sofieProc = Start-Process -FilePath "powershell" -ArgumentList "-Command", $sofieCmd -WindowStyle Hidden -PassThru
-    
-    for ($i = 0; $i -lt 60; $i++) {
-        Start-Sleep -Milliseconds 500
-        try {
-            Invoke-RestMethod -Uri "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
-            $sofieOK = $true
-            break
-        } catch {}
-    }
-    
-    if ($sofieOK) {
-        Write-Host "READY on port 8000" -ForegroundColor Green
-    } else {
-        Write-Host "TIMEOUT" -ForegroundColor Red
-    }
-}
-
-# ============================================================================
-# START COUNCIL
-# ============================================================================
-Write-Host "Starting Council... " -NoNewline
-$councilOK = $false
-try {
-    $test = Invoke-RestMethod -Uri "http://localhost:9000/council/status" -UseBasicParsing -TimeoutSec 2
-    $councilOK = $true
-    Write-Host "ALREADY RUNNING" -ForegroundColor Green
-} catch {
-    $councilCmd = "cd `"$BaseDir`"; `$env:HIVE_API_URL='http://localhost:3000'; `$env:GITHUB_TOKEN='$GitHubToken'; python -m src.council.api_server"
-    $councilProc = Start-Process -FilePath "powershell" -ArgumentList "-Command", $councilCmd -WindowStyle Hidden -PassThru
-    
-    for ($i = 0; $i -lt 30; $i++) {
-        Start-Sleep -Milliseconds 500
-        try {
-            $test = Invoke-RestMethod -Uri "http://localhost:9000/council/status" -UseBasicParsing -TimeoutSec 2
-            $councilOK = $true
-            break
-        } catch {}
-    }
-    
-    if ($councilOK) {
-        Write-Host "READY on port 9000" -ForegroundColor Green
-    } else {
-        Write-Host "TIMEOUT" -ForegroundColor Red
-    }
-}
-
-# ============================================================================
-# SHOW INITIAL STATUS
+# PHASE 2: START SOFIE (THE INTERFACE)
 # ============================================================================
 Write-Host ""
-Write-Host "==================================================="
-Write-Host "                 SERVICE STATUS"
-Write-Host "==================================================="
+Write-Host "Starting Sofie (Sovereign Interface)..." -ForegroundColor Cyan
 
-if ($ollamaOK) {
-    Write-Host "Ollama  (11434): ONLINE   http://localhost:11434" -ForegroundColor Green
-} else {
-    Write-Host "Ollama  (11434): OFFLINE  http://localhost:11434" -ForegroundColor Red
-}
+$sofieDir = "C:\Users\squat\repos\sofie-llama-backend"
+$sofieCmd = "cd `"$sofieDir`"; `$env:USE_OLLAMA=''true''; `$env:OLLAMA_MODEL=''llama3.1:8b''; `$env:HIVE_API_URL=''http://localhost:3000''; python src/main.py --mode=chief"
+$sofie = Start-Process -FilePath "powershell" -ArgumentList "-Command", $sofieCmd -PassThru -WindowStyle Minimized
 
-if ($hiveOK) {
-    Write-Host "Hive    (3000):  ONLINE   http://localhost:3000" -ForegroundColor Green
-} else {
-    Write-Host "Hive    (3000):  OFFLINE  http://localhost:3000" -ForegroundColor Red
+# Wait for Sofie
+$attempts = 0
+$sofieOK = $false
+while ($attempts -lt 30) {
+    try {
+        Invoke-RestMethod -Uri "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
+        $sofieOK = $true
+        break
+    } catch {
+        Start-Sleep -Seconds 1
+        $attempts++
+    }
 }
 
 if ($sofieOK) {
-    Write-Host "Sofie   (8000):  ONLINE   http://localhost:8000" -ForegroundColor Green
+    Write-Host "Sofie: ONLINE (Port 8000)" -ForegroundColor Green
+    Write-Host "The Dude is now connected to the sovereign interface." -ForegroundColor Yellow
 } else {
-    Write-Host "Sofie   (8000):  OFFLINE  http://localhost:8000" -ForegroundColor Red
+    Write-Host "WARNING: Sofie may still be starting..." -ForegroundColor Yellow
 }
 
-if ($councilOK) {
-    Write-Host "Council (9000):  ONLINE   http://localhost:9000" -ForegroundColor Green
-} else {
-    Write-Host "Council (9000):  OFFLINE  http://localhost:9000" -ForegroundColor Red
-}
-
-Write-Host "==================================================="
-Write-Host ""
-
 # ============================================================================
-# INTERACTIVE LOOP
+# PHASE 3: INTERACTIVE COMMAND LOOP
 # ============================================================================
+$hiveRunning = $false
+$councilRunning = $false
+$hive = $null
+$council = $null
+
+$baseDir = "C:\Users\squat\repos\sandironratio-node"
+
 while ($true) {
     Write-Host ""
-    $cmd = Read-Host "Command (status/convene/stop)"
+    Write-Host "----------------------------------------" -ForegroundColor Gray
+    Write-Host "AWAITING COMMAND:" -ForegroundColor Cyan
+    Write-Host ""
+    if (-not $hiveRunning) {
+        Write-Host "  [ Enter the hive ]  - Activate Terracare Ledger" -ForegroundColor White
+    }
+    if ($hiveRunning -and -not $councilRunning) {
+        Write-Host "  [ Convene council ] - Summon the 6 agents" -ForegroundColor White
+    }
+    Write-Host "  [ Status ]          - Check all systems" -ForegroundColor White
+    Write-Host "  [ Stop ]            - Shutdown" -ForegroundColor White
+    Write-Host "----------------------------------------" -ForegroundColor Gray
     
-    if ($cmd -eq "status") {
-        Write-Host ""
-        Write-Host "==================================================="
-        Write-Host "                 SERVICE STATUS"
-        Write-Host "==================================================="
+    $cmd = Read-Host "Command"
+    
+    # ENTER THE HIVE
+    if ($cmd -eq "Enter the hive" -or $cmd -eq "enter the hive") {
+        if ($hiveRunning) {
+            Write-Host "Hive already active!" -ForegroundColor Yellow
+            continue
+        }
         
+        Write-Host "Initializing Terracare Ledger..." -ForegroundColor Cyan
+        $hiveCmd = "cd `"$baseDir`"; `$env:NODE_ENV=''development''; npm run dev"
+        $hive = Start-Process -FilePath "powershell" -ArgumentList "-Command", $hiveCmd -PassThru -WindowStyle Minimized
+        
+        # Wait for Hive
+        $attempts = 0
+        $hiveOK = $false
+        while ($attempts -lt 30) {
+            try {
+                Invoke-RestMethod -Uri "http://localhost:3000/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
+                $hiveOK = $true
+                break
+            } catch {
+                Start-Sleep -Seconds 1
+                $attempts++
+            }
+        }
+        
+        if ($hiveOK) {
+            Write-Host "Hive: ONLINE (Port 3000)" -ForegroundColor Green
+            Write-Host "The ledger is now accessible." -ForegroundColor Yellow
+            $hiveRunning = $true
+        } else {
+            Write-Host "WARNING: Hive may still be starting..." -ForegroundColor Yellow
+            $hiveRunning = $true
+        }
+    }
+    
+    # CONVENE COUNCIL
+    elseif ($cmd -eq "Convene council" -or $cmd -eq "convene council") {
+        if (-not $hiveRunning) {
+            Write-Host "ERROR: Enter the hive first!" -ForegroundColor Red
+            continue
+        }
+        if ($councilRunning) {
+            Write-Host "Council already convened!" -ForegroundColor Yellow
+            continue
+        }
+        
+        Write-Host "Summoning the Council..." -ForegroundColor Cyan
+        $councilCmd = "cd `"$baseDir`"; python -m src.council.api_server"
+        $council = Start-Process -FilePath "powershell" -ArgumentList "-Command", $councilCmd -PassThru -WindowStyle Minimized
+        
+        # Wait for Council
+        $attempts = 0
+        $councilOK = $false
+        while ($attempts -lt 30) {
+            try {
+                Invoke-RestMethod -Uri "http://localhost:9000/council/status" -UseBasicParsing -TimeoutSec 2 | Out-Null
+                $councilOK = $true
+                break
+            } catch {
+                Start-Sleep -Seconds 1
+                $attempts++
+            }
+        }
+        
+        if ($councilOK) {
+            Write-Host "Council: ONLINE (Port 9000)" -ForegroundColor Green
+            Write-Host "The 6 agents await your command." -ForegroundColor Yellow
+            $councilRunning = $true
+        } else {
+            Write-Host "WARNING: Council may still be starting..." -ForegroundColor Yellow
+            $councilRunning = $true
+        }
+    }
+    
+    # STATUS
+    elseif ($cmd -eq "Status" -or $cmd -eq "status") {
+        Write-Host ""
+        Write-Host "SYSTEM STATUS:" -ForegroundColor Cyan
+        
+        # Ollama
         try {
             Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -UseBasicParsing -TimeoutSec 2 | Out-Null
-            Write-Host "Ollama  (11434): ONLINE   http://localhost:11434" -ForegroundColor Green
+            Write-Host "  Ollama:  ONLINE" -ForegroundColor Green
         } catch {
-            Write-Host "Ollama  (11434): OFFLINE  http://localhost:11434" -ForegroundColor Red
+            Write-Host "  Ollama:  OFF" -ForegroundColor Red
         }
         
-        try {
-            Invoke-RestMethod -Uri "http://localhost:3000/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
-            Write-Host "Hive    (3000):  ONLINE   http://localhost:3000" -ForegroundColor Green
-        } catch {
-            Write-Host "Hive    (3000):  OFFLINE  http://localhost:3000" -ForegroundColor Red
-        }
-        
+        # Sofie
         try {
             Invoke-RestMethod -Uri "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
-            Write-Host "Sofie   (8000):  ONLINE   http://localhost:8000" -ForegroundColor Green
+            Write-Host "  Sofie:   ONLINE :8000" -ForegroundColor Green
         } catch {
-            Write-Host "Sofie   (8000):  OFFLINE  http://localhost:8000" -ForegroundColor Red
+            Write-Host "  Sofie:   OFF" -ForegroundColor Red
         }
         
-        try {
-            $test = Invoke-RestMethod -Uri "http://localhost:9000/council/status" -UseBasicParsing -TimeoutSec 2
-            Write-Host "Council (9000):  ONLINE   http://localhost:9000" -ForegroundColor Green
-        } catch {
-            Write-Host "Council (9000):  OFFLINE  http://localhost:9000" -ForegroundColor Red
+        # Hive
+        if ($hiveRunning) {
+            try {
+                Invoke-RestMethod -Uri "http://localhost:3000/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
+                Write-Host "  Hive:    ONLINE :3000" -ForegroundColor Green
+            } catch {
+                Write-Host "  Hive:    STARTING..." -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "  Hive:    STANDBY (type 'Enter the hive')" -ForegroundColor Gray
         }
         
-        Write-Host "==================================================="
+        # Council
+        if ($councilRunning) {
+            try {
+                Invoke-RestMethod -Uri "http://localhost:9000/council/status" -UseBasicParsing -TimeoutSec 2 | Out-Null
+                Write-Host "  Council: ONLINE :9000" -ForegroundColor Green
+            } catch {
+                Write-Host "  Council: STARTING..." -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "  Council: STANDBY (type 'Convene council')" -ForegroundColor Gray
+        }
     }
     
-    elseif ($cmd -eq "convene") {
-        Write-Host ""
-        Write-Host "==================================================="
-        Write-Host "                 CONVENING COUNCIL"
-        Write-Host "==================================================="
+    # STOP
+    elseif ($cmd -eq "Stop" -or $cmd -eq "stop") {
+        Write-Host "Shutting down..." -ForegroundColor Red
         
-        try {
-            $body = @{
-                command = "convene"
-                timestamp = (Get-Date -Format "o")
-                chief_architect_present = $true
-                ecosystem_state = @{
-                    sofie_status = "awakened"
-                    hive_connected = $hiveOK
-                }
-                sofie_requirements = @("Build CalmInterface bridge")
-                critical_path = @("API Gateway", "WebSocket Bridge")
-                protected_notice = "Sovereign territory protected"
-            } | ConvertTo-Json -Depth 3
-            
-            $response = Invoke-RestMethod -Uri "http://localhost:9000/council/convene" -Method POST -Body $body -ContentType "application/json" -TimeoutSec 10
-            Write-Host "SUCCESS: Council convened!" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "Response:"
-            $response | ConvertTo-Json -Depth 2 | Write-Host
-        } catch {
-            Write-Host "ERROR: Failed to convene - $_" -ForegroundColor Red
-        }
-        
-        Write-Host "==================================================="
-    }
-    
-    elseif ($cmd -eq "stop" -or $cmd -eq "quit" -or $cmd -eq "exit") {
-        Write-Host ""
-        Write-Host "Stopping all services..." -ForegroundColor Red
-        
-        if ($councilProc -ne $null) {
-            try { Stop-Process -Id $councilProc.Id -Force -ErrorAction SilentlyContinue } catch {}
+        if ($councilRunning -and $council -ne $null) {
+            try { Stop-Process -Id $council.Id -Force -ErrorAction SilentlyContinue } catch {}
             Write-Host "  Council stopped" -ForegroundColor Green
         }
         
-        if ($sofieProc -ne $null) {
-            try { Stop-Process -Id $sofieProc.Id -Force -ErrorAction SilentlyContinue } catch {}
-            Write-Host "  Sofie stopped" -ForegroundColor Green
-        }
-        
-        if ($hiveProc -ne $null) {
-            try { Stop-Process -Id $hiveProc.Id -Force -ErrorAction SilentlyContinue } catch {}
+        if ($hiveRunning -and $hive -ne $null) {
+            try { Stop-Process -Id $hive.Id -Force -ErrorAction SilentlyContinue } catch {}
             Write-Host "  Hive stopped" -ForegroundColor Green
         }
         
-        if ($ollamaProc -ne $null) {
-            try { Stop-Process -Id $ollamaProc.Id -Force -ErrorAction SilentlyContinue } catch {}
-            Write-Host "  Ollama stopped" -ForegroundColor Green
+        if ($sofie -ne $null) {
+            try { Stop-Process -Id $sofie.Id -Force -ErrorAction SilentlyContinue } catch {}
+            Write-Host "  Sofie stopped" -ForegroundColor Green
         }
         
         Write-Host ""
-        Write-Host "Goodbye, Dude." -ForegroundColor Green
-        exit 0
+        Write-Host "All systems offline. The Dude abides." -ForegroundColor Green
+        exit
     }
     
-    elseif ($cmd -eq "help") {
-        Write-Host ""
-        Write-Host "==================================================="
-        Write-Host "                 AVAILABLE COMMANDS"
-        Write-Host "==================================================="
-        Write-Host ""
-        Write-Host "  status  - Show service status dashboard"
-        Write-Host "  convene - Convene the Council"
-        Write-Host "  stop    - Stop all services and exit"
-        Write-Host "  help    - Show this help"
-        Write-Host ""
-        Write-Host "==================================================="
-    }
-    
+    # EMPTY INPUT
     elseif ($cmd -eq "") {
-        # Do nothing for empty input
+        # Do nothing
     }
     
+    # UNKNOWN
     else {
-        Write-Host "Unknown command: $cmd" -ForegroundColor Red
-        Write-Host "Type 'help' for available commands" -ForegroundColor Yellow
+        Write-Host "Unknown command. Use: Enter the hive, Convene council, Status, Stop" -ForegroundColor Yellow
     }
 }
