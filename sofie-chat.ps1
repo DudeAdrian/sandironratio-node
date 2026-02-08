@@ -411,13 +411,10 @@ function Test-Microphone {
 }
 
 function Get-VoiceInput {
-    # Create temp files with unique names
-    $baseName = "voice_$(Get-Date -Format 'HHmmss')_$([System.Random]::new().Next(1000,9999))"
-    $outFile = "$env:TEMP\$baseName.txt"
+    $outFile = "$env:TEMP\voice_$(Get-Random).txt"
+    $errFile = "$env:TEMP\voice_err_$(Get-Random).txt"
     
-    # Create Python script
-    $pyFile = "$env:TEMP\$baseName.py"
-    @"
+    $pyScript = @"
 import speech_recognition as sr
 import sys
 
@@ -425,43 +422,42 @@ try:
     r = sr.Recognizer()
     with sr.Microphone() as source:
         r.adjust_for_ambient_noise(source, duration=0.5)
-        # Listen for speech with 5 second timeout
-        audio = r.listen(source, timeout=5, phrase_time_limit=10)
-    
-    # Use Google Speech Recognition
+        audio = r.listen(source, timeout=5)
     text = r.recognize_google(audio)
     print(text)
-    
 except sr.WaitTimeoutError:
-    pass  # No speech detected
+    print("TIMEOUT: No speech", file=sys.stderr)
 except sr.UnknownValueError:
-    pass  # Could not understand audio
+    print("ERR: Could not understand", file=sys.stderr)
 except Exception as e:
-    print(f"Error: {e}", file=sys.stderr)
-"@ | Out-File -FilePath $pyFile -Encoding UTF8 -Force
+    print(f"ERR: {e}", file=sys.stderr)
+"@
     
-    # Run Python and wait for it to complete
-    $proc = Start-Process -FilePath "python" -ArgumentList $pyFile -PassThru -WindowStyle Hidden -RedirectStandardOutput $outFile
+    $proc = Start-Process -FilePath "python" -ArgumentList "-c", $pyScript `
+        -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
     
-    # Wait up to 8 seconds for speech
-    $proc.WaitForExit(8000)
-    
-    # Force kill if still running
-    if (-not $proc.HasExited) {
-        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    # Wait for process to complete (max 10 sec)
+    $proc.WaitForExit(10000)
+    if (-not $proc.HasExited) { 
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue 
     }
     
-    # Get the result
     $result = $null
     if (Test-Path $outFile) {
-        $content = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
-        if ($content) {
-            $result = $content.Trim()
-        }
+        $text = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
+        if ($text) { $result = $text.Trim() }
         Remove-Item $outFile -Force -ErrorAction SilentlyContinue
     }
     
-    Remove-Item $pyFile -Force -ErrorAction SilentlyContinue
+    # Debug: show errors
+    if (Test-Path $errFile) {
+        $err = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
+        if ($err -and $err.Trim()) {
+            Write-Status "Voice debug: $($err.Trim())" "Info"
+        }
+        Remove-Item $errFile -Force -ErrorAction SilentlyContinue
+    }
     
     return $result
 }
@@ -503,7 +499,7 @@ function Start-ChatInterface {
         $userInput = $null
         if ($script:VoiceMode -and $script:VoiceEnabled) {
             Write-Host ""
-            Write-Host "[VOICE] Listening... SPEAK NOW (5 seconds)" -ForegroundColor Yellow
+            Write-Host "[VOICE] Listening... SPEAK NOW (waiting for speech)" -ForegroundColor Yellow
             
             $voiceResult = Get-VoiceInput
             if ($voiceResult -and $voiceResult -is [string] -and $voiceResult.Trim()) {
