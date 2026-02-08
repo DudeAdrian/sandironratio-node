@@ -440,60 +440,34 @@ for i, name in enumerate(mics):
 }
 
 function Get-VoiceInput {
-    param([int]$MicIndex = $null)
-    
     $outFile = "$env:TEMP\voice_out_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
     $errFile = "$env:TEMP\voice_err_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
     $pyFile = "$env:TEMP\voice_$([Guid]::NewGuid().ToString().Substring(0,8)).py"
     
-    # Build Python script - proper indentation is critical
-    if ($MicIndex -ne $null) {
-        $pyCode = @"
+    # Simple Python script using default microphone
+    $pyCode = @'
 import speech_recognition as sr
 import sys
 
 try:
     r = sr.Recognizer()
-    r.energy_threshold = 150
+    r.energy_threshold = 100
     r.dynamic_energy_threshold = True
-    r.pause_threshold = 1.0
-    with sr.Microphone(device_index=$MicIndex) as source:
-        r.adjust_for_ambient_noise(source, duration=1)
-        sys.stderr.write(f"Threshold: {r.energy_threshold}\n")
-        audio = r.listen(source, timeout=10, phrase_time_limit=15)
-    text = r.recognize_google(audio)
-    print(text)
-except sr.WaitTimeoutError:
-    sys.stderr.write("TIMEOUT\n")
-except sr.UnknownValueError:
-    sys.stderr.write("UNINTELLIGIBLE\n")
-except Exception as e:
-    sys.stderr.write(f"ERROR: {e}\n")
-"@
-    } else {
-        $pyCode = @"
-import speech_recognition as sr
-import sys
-
-try:
-    r = sr.Recognizer()
-    r.energy_threshold = 150
-    r.dynamic_energy_threshold = True
-    r.pause_threshold = 1.0
+    r.pause_threshold = 0.8
+    
     with sr.Microphone() as source:
         r.adjust_for_ambient_noise(source, duration=1)
-        sys.stderr.write(f"Threshold: {r.energy_threshold}\n")
-        audio = r.listen(source, timeout=10, phrase_time_limit=15)
+        audio = r.listen(source, timeout=8, phrase_time_limit=12)
+    
     text = r.recognize_google(audio)
     print(text)
 except sr.WaitTimeoutError:
-    sys.stderr.write("TIMEOUT\n")
+    sys.stderr.write("TIMEOUT")
 except sr.UnknownValueError:
-    sys.stderr.write("UNINTELLIGIBLE\n")
+    sys.stderr.write("UNINTELLIGIBLE")
 except Exception as e:
-    sys.stderr.write(f"ERROR: {e}\n")
-"@
-    }
+    sys.stderr.write("ERROR:" + str(e))
+'@
     
     [System.IO.File]::WriteAllText($pyFile, $pyCode, [System.Text.Encoding]::UTF8)
     
@@ -501,9 +475,9 @@ except Exception as e:
         -PassThru -WindowStyle Hidden `
         -RedirectStandardOutput $outFile -RedirectStandardError $errFile
     
-    # Animation
+    # Show listening animation
     $chars = @('.', '..', '...', '....', '.....')
-    for ($i = 0; $i -lt 30; $i++) {
+    for ($i = 0; $i -lt 24; $i++) {
         if ($proc.HasExited) { break }
         Write-Host "`r  Listening$($chars[$i % 5])   " -ForegroundColor Yellow -NoNewline
         Start-Sleep -Milliseconds 500
@@ -515,7 +489,7 @@ except Exception as e:
     
     if (Test-Path $errFile) {
         $err = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
-        if ($err) { Write-Status "Voice: $($err.Trim())" "Info" }
+        if ($err -and $err.Trim()) { Write-Status "Voice: $($err.Trim())" "Info" }
         Remove-Item $errFile -Force -ErrorAction SilentlyContinue
     }
     
