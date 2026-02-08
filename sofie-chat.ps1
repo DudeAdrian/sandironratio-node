@@ -412,27 +412,31 @@ function Test-Microphone {
 
 function Get-VoiceInput {
     $outFile = "$env:TEMP\voice_out_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
-    $errFile = "$env:TEMP\voice_err_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
     $pyFile = "$env:TEMP\voice_$([Guid]::NewGuid().ToString().Substring(0,8)).py"
     
-    # Write Python script to file (avoid multiline string issues)
+    # Write Python script to file
     $pyCode = @'
 import speech_recognition as sr
 import sys
 
 try:
     r = sr.Recognizer()
+    r.energy_threshold = 300  # Lower threshold for quieter speech
+    r.dynamic_energy_threshold = True
+    r.pause_threshold = 0.8   # Shorter pause between words
+    
     with sr.Microphone() as source:
-        r.adjust_for_ambient_noise(source, duration=0.5)
-        audio = r.listen(source, timeout=5)
+        r.adjust_for_ambient_noise(source, duration=1)
+        audio = r.listen(source, timeout=10, phrase_time_limit=15)
+    
     text = r.recognize_google(audio)
     print(text)
 except sr.WaitTimeoutError:
-    sys.stderr.write("TIMEOUT: No speech detected")
+    sys.stderr.write("TIMEOUT")
 except sr.UnknownValueError:
-    sys.stderr.write("ERR: Could not understand audio")
+    sys.stderr.write("UNINTELLIGIBLE")
 except Exception as e:
-    sys.stderr.write("ERR: " + str(e))
+    sys.stderr.write("ERROR: " + str(e))
 '@
     
     [System.IO.File]::WriteAllText($pyFile, $pyCode, [System.Text.Encoding]::UTF8)
@@ -440,10 +444,19 @@ except Exception as e:
     # Run Python script
     $proc = Start-Process -FilePath "python" -ArgumentList $pyFile `
         -PassThru -WindowStyle Hidden `
-        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+        -RedirectStandardOutput $outFile
     
-    # Wait max 10 seconds
-    $proc.WaitForExit(10000)
+    # Show listening animation for up to 15 seconds
+    $chars = @('.', '..', '...', '....', '.....')
+    for ($i = 0; $i -lt 30; $i++) {
+        if ($proc.HasExited) { break }
+        Write-Host "`r  Listening$($chars[$i % 5])   " -ForegroundColor Yellow -NoNewline
+        Start-Sleep -Milliseconds 500
+    }
+    Write-Host "`r                      " -NoNewline
+    Write-Host ""
+    
+    # Kill if still running
     if (-not $proc.HasExited) { 
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue 
     }
@@ -454,15 +467,6 @@ except Exception as e:
         $text = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
         if ($text) { $result = $text.Trim() }
         Remove-Item $outFile -Force -ErrorAction SilentlyContinue
-    }
-    
-    # Debug output
-    if (Test-Path $errFile) {
-        $err = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
-        if ($err -and $err.Trim()) {
-            Write-Status "Voice: $($err.Trim())" "Info"
-        }
-        Remove-Item $errFile -Force -ErrorAction SilentlyContinue
     }
     
     Remove-Item $pyFile -Force -ErrorAction SilentlyContinue
@@ -506,17 +510,16 @@ function Start-ChatInterface {
         $userInput = $null
         if ($script:VoiceMode -and $script:VoiceEnabled) {
             Write-Host ""
-            Write-Host "[VOICE] Listening... SPEAK NOW (waiting for speech)" -ForegroundColor Yellow
+            Write-Host "[VOICE] SPEAK NOW - Listening for up to 15 seconds..." -ForegroundColor Yellow
             
             $voiceResult = Get-VoiceInput
             if ($voiceResult -and $voiceResult -is [string] -and $voiceResult.Trim()) {
                 $userInput = $voiceResult.Trim()
                 Write-Host "You said: $userInput" -ForegroundColor Green
             } else {
-                Write-Status "No speech detected, switching to text" "Warning"
-                $script:VoiceMode = $false
-                Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
-                $userInput = Read-Host
+                Write-Status "No speech detected" "Warning"
+                Write-Host "Type /text to switch to text mode or try speaking again" -ForegroundColor Gray
+                continue
             }
         } else {
             Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
