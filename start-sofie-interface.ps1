@@ -127,12 +127,27 @@ function Install-Ffmpeg {
         New-Item -ItemType Directory -Path $LocalBin -Force | Out-Null
     }
     
-    # Try winget first (Windows 10/11)
+    # Try winget first (Windows 10/11) with timeout
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if ($winget) {
-        Write-Status "Installing FFmpeg via winget..." "Info"
+        Write-Status "Installing FFmpeg via winget (this may take 2-3 minutes)..." "Info"
+        Write-Status "Press Ctrl+C to skip and use text mode only" "Info"
         try {
-            Start-Process -FilePath "winget" -ArgumentList "install", "Gyan.FFmpeg", "-e", "--accept-source-agreements", "--accept-package-agreements" -Wait -WindowStyle Hidden
+            # Use -h 0 to hide progress and --silent for no prompts
+            $proc = Start-Process -FilePath "winget" `
+                -ArgumentList "install", "Gyan.FFmpeg", "-e", "--silent", "--accept-source-agreements", "--accept-package-agreements" `
+                -PassThru -WindowStyle Hidden
+            
+            # Wait with timeout (3 minutes max)
+            $timeout = 180
+            $proc.WaitForExit($timeout * 1000)
+            
+            if (-not $proc.HasExited) {
+                Write-Status "Winget install timed out, stopping..." "Warning"
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+                throw "Timeout"
+            }
+            
             # Refresh PATH
             $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
             
@@ -141,7 +156,7 @@ function Install-Ffmpeg {
                 return $true
             }
         } catch {
-            Write-Status "Winget install failed, trying direct download..." "Warning"
+            Write-Status "Winget install failed or skipped, trying direct download..." "Warning"
         }
     }
     
@@ -604,19 +619,45 @@ function Stop-AllServices {
 # MAIN ENTRY
 # ============================================================================
 function Main {
+    param([switch]$NoVoice)
+    
     $ErrorActionPreference = "Continue"
     
     Clear-Host
     Write-Header "SOFIE INTERFACE v2.0"
     Write-Host "  Real AI Chat | Voice + Text | Council Control" -ForegroundColor Gray
     
+    # Check for -NoVoice flag or prompt
+    $skipVoice = $NoVoice
+    if (-not $skipVoice) {
+        Write-Host ""
+        Write-Host "Voice support requires FFmpeg (installs automatically)." -ForegroundColor Gray
+        $choice = Read-Host "Enable voice? (Y/n/never)"
+        if ($choice -eq "n" -or $choice -eq "N") {
+            $skipVoice = $true
+        }
+        if ($choice -eq "never") {
+            # Create flag file to remember choice
+            "skip-voice" | Out-File -FilePath "$BaseDir\.voice-disabled" -Force
+            $skipVoice = $true
+        }
+    }
+    if (Test-Path "$BaseDir\.voice-disabled") {
+        $skipVoice = $true
+    }
+    
     # 1. Check Ollama
     if (-not (Test-Ollama)) {
         exit 1
     }
     
-    # 2. Setup FFmpeg for voice
-    $script:VoiceEnabled = Install-Ffmpeg
+    # 2. Setup FFmpeg for voice (if not skipped)
+    if ($skipVoice) {
+        Write-Status "Voice disabled - text mode only" "Info"
+        $script:VoiceEnabled = $false
+    } else {
+        $script:VoiceEnabled = Install-Ffmpeg
+    }
     
     # 3. Start Sofie
     if (-not (Start-SofieService)) {
@@ -634,7 +675,9 @@ function Main {
 
 # Handle Ctrl+C
 try {
-    Main
+    # Parse arguments
+    $noVoiceFlag = $args -contains "-NoVoice" -or $args -contains "--no-voice" -or $args -contains "/novoice"
+    Main -NoVoice:$noVoiceFlag
 } catch {
     Write-Status "Error: $_" "Error"
 } finally {
