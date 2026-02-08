@@ -394,44 +394,77 @@ function Invoke-SofieChat {
 # VOICE INPUT
 # ============================================================================
 function Get-VoiceInput {
+    $outFile = "$env:TEMP\voice_out_$(Get-Random).txt"
+    $errFile = "$env:TEMP\voice_err_$(Get-Random).txt"
+    
     try {
-        $pythonScript = @"
+        $pyScript = @"
 import speech_recognition as sr
 import sys
+
 try:
     r = sr.Recognizer()
-    with sr.Microphone() as source:
+    mic = sr.Microphone()
+    
+    with mic as source:
         r.adjust_for_ambient_noise(source, duration=0.5)
         try:
             audio = r.listen(source, timeout=5, phrase_time_limit=5)
         except sr.WaitTimeoutError:
             sys.exit(0)
+    
     try:
         text = r.recognize_google(audio)
-        print(text)
+        if text:
+            print(text)
+            sys.exit(0)
     except sr.UnknownValueError:
-        sys.exit(0)
-    except sr.RequestError as e:
-        print(f"ERROR:{e}", file=sys.stderr)
-        sys.exit(1)
+        pass
+    except sr.RequestError:
+        pass
+    sys.exit(0)
 except Exception as e:
-    print(f"ERROR:{e}", file=sys.stderr)
+    print(f"Voice error: {e}", file=sys.stderr)
     sys.exit(1)
 "@
         
-        $proc = Start-Process -FilePath "python" -ArgumentList "-c", $pythonScript `
-            -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\voice_out.txt" -RedirectStandardError "$env:TEMP\voice_err.txt"
+        $proc = Start-Process -FilePath "python" `
+            -ArgumentList "-c", $pyScript `
+            -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput $outFile `
+            -RedirectStandardError $errFile
         
+        # Wait up to 10 seconds
         $proc.WaitForExit(10000)
         
-        if (Test-Path "$env:TEMP\voice_out.txt") {
-            $text = Get-Content "$env:TEMP\voice_out.txt" -Raw
-            Remove-Item "$env:TEMP\voice_out.txt" -Force -ErrorAction SilentlyContinue
-            return $text.Trim()
+        # Check for output
+        $result = $null
+        if (Test-Path $outFile) {
+            $content = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
+            if ($content) {
+                $result = $content.Trim()
+            }
+            Remove-Item $outFile -Force -ErrorAction SilentlyContinue
         }
+        
+        # Check for errors
+        if (Test-Path $errFile) {
+            $errContent = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
+            if ($errContent -and $errContent.Trim()) {
+                Write-Status "Voice error: $($errContent.Trim())" "Warning"
+            }
+            Remove-Item $errFile -Force -ErrorAction SilentlyContinue
+        }
+        
+        return $result
+    }
+    catch {
         return $null
-    } catch {
-        return $null
+    }
+    finally {
+        # Cleanup
+        if (Test-Path $outFile) { Remove-Item $outFile -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $errFile) { Remove-Item $errFile -Force -ErrorAction SilentlyContinue }
     }
 }
 
@@ -471,15 +504,28 @@ function Start-ChatInterface {
         # Show prompt
         $userInput = $null
         if ($script:VoiceMode -and $script:VoiceEnabled) {
-            Write-Host "[VOICE] Listening... (speak now or press Enter to type)" -ForegroundColor Yellow
-            $voiceResult = Get-VoiceInput
-            if ($voiceResult -and $voiceResult -is [string] -and $voiceResult.Trim()) {
-                $userInput = $voiceResult.Trim()
-                Write-Host "You said: $userInput" -ForegroundColor White
+            Write-Host ""
+            Write-Host "[VOICE] Listening for 5 seconds... SPEAK NOW" -ForegroundColor Yellow
+            Write-Host "        (or press Enter to switch to text mode)" -ForegroundColor Gray
+            
+            # Check if user pressed Enter immediately (skip voice)
+            if ([Console]::KeyAvailable) {
+                $key = [Console]::ReadKey($true)
+                if ($key.Key -eq "Enter") {
+                    $script:VoiceMode = $false
+                    Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
+                    $userInput = Read-Host
+                }
             } else {
-                $script:VoiceMode = $false
-                Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
-                $userInput = Read-Host
+                $voiceResult = Get-VoiceInput
+                if ($voiceResult -and $voiceResult -is [string] -and $voiceResult.Trim()) {
+                    $userInput = $voiceResult.Trim()
+                    Write-Host "You said: $userInput" -ForegroundColor Green
+                } else {
+                    Write-Status "No speech detected" "Warning"
+                    Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
+                    $userInput = Read-Host
+                }
             }
         } else {
             Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
