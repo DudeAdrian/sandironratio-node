@@ -469,30 +469,33 @@ function Start-ChatInterface {
     
     while ($true) {
         # Show prompt
+        $userInput = $null
         if ($script:VoiceMode -and $script:VoiceEnabled) {
             Write-Host "[VOICE] Listening... (speak now or press Enter to type)" -ForegroundColor Yellow
-            $input = Get-VoiceInput
-            if ($input) {
-                Write-Host "You said: $input" -ForegroundColor White
+            $voiceResult = Get-VoiceInput
+            if ($voiceResult -and $voiceResult -is [string] -and $voiceResult.Trim()) {
+                $userInput = $voiceResult.Trim()
+                Write-Host "You said: $userInput" -ForegroundColor White
             } else {
                 $script:VoiceMode = $false
                 Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
-                $input = Read-Host
+                $userInput = Read-Host
             }
         } else {
             Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
-            $input = Read-Host
+            $userInput = Read-Host
         }
         
-        $input = $input.Trim()
+        if ($userInput -isnot [string]) { $userInput = "" }
+        $userInput = $userInput.Trim()
         
         # Commands
-        if ($input -eq "/exit" -or $input -eq "/quit" -or $input -eq "exit" -or $input -eq "quit") {
+        if ($userInput -eq "/exit" -or $userInput -eq "/quit" -or $userInput -eq "exit" -or $userInput -eq "quit") {
             Write-Status "Goodbye!" "Info"
             break
         }
         
-        if ($input -eq "/voice") {
+        if ($userInput -eq "/voice") {
             if ($script:VoiceEnabled) {
                 $script:VoiceMode = $true
                 Write-Status "Voice mode ON" "Success"
@@ -502,30 +505,30 @@ function Start-ChatInterface {
             continue
         }
         
-        if ($input -eq "/text") {
+        if ($userInput -eq "/text") {
             $script:VoiceMode = $false
             Write-Status "Text mode ON" "Info"
             continue
         }
         
-        if ($input -eq "/council") {
+        if ($userInput -eq "/council") {
             Start-Council
             continue
         }
         
-        if ($input -eq "/status") {
+        if ($userInput -eq "/status") {
             Show-Status
             continue
         }
         
-        if ($input -eq "") {
+        if ($userInput -eq "") {
             continue
         }
         
         # Send to Sofie
         Write-Host "Sofie: " -ForegroundColor Magenta -NoNewline
         
-        $response = Invoke-SofieChat -Message $input
+        $response = Invoke-SofieChat -Message $userInput
         
         Write-Host $response -ForegroundColor White
         
@@ -534,7 +537,7 @@ function Start-ChatInterface {
         }
         
         # Update history
-        $script:ChatHistory += @{ role = "user"; content = $input }
+        $script:ChatHistory += @{ role = "user"; content = $userInput }
         $script:ChatHistory += @{ role = "assistant"; content = $response }
         
         if ($script:ChatHistory.Count -gt 20) {
