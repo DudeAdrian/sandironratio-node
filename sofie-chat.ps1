@@ -170,13 +170,20 @@ function Install-VoiceDeps {
         }
     }
     
+    # Test microphone access
+    Write-Status "Testing microphone access..." "Info"
+    if (Test-Microphone) {
+        Write-Status "Microphone accessible" "Success"
+    } else {
+        Write-Status "Microphone not accessible - check privacy settings" "Warning"
+        # Still return true as it might work later
+    }
+    
     # Final check
     try {
         python -c "import speech_recognition; import pyaudio" 2>&1 | Out-Null
-        if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
-            Write-Status "Voice dependencies ready" "Success"
-            return $true
-        }
+        Write-Status "Voice dependencies ready" "Success"
+        return $true
     } catch {}
     
     Write-Status "Voice dependencies incomplete" "Warning"
@@ -393,78 +400,86 @@ function Invoke-SofieChat {
 # ============================================================================
 # VOICE INPUT
 # ============================================================================
+function Test-Microphone {
+    try {
+        $testScript = "import speech_recognition as sr; r = sr.Recognizer(); mic = sr.Microphone(); print('OK')"
+        $result = python -c $testScript 2>&1
+        return ($result -contains "OK")
+    } catch {
+        return $false
+    }
+}
+
 function Get-VoiceInput {
-    $outFile = "$env:TEMP\voice_out_$(Get-Random).txt"
-    $errFile = "$env:TEMP\voice_err_$(Get-Random).txt"
+    $outFile = "$env:TEMP\voice_out_$([Guid]::NewGuid().ToString().Substring(0,8)).txt"
     
     try {
-        $pyScript = @"
+        # Create Python script file instead of inline (more reliable)
+        $pyFile = "$env:TEMP\voice_listen_$([Guid]::NewGuid().ToString().Substring(0,8)).py"
+        @"
 import speech_recognition as sr
 import sys
 
 try:
     r = sr.Recognizer()
-    mic = sr.Microphone()
+    with sr.Microphone() as source:
+        # Quick ambient noise adjustment
+        r.adjust_for_ambient_noise(source, duration=0.3)
+        # Listen for up to 5 seconds
+        audio = r.listen(source, timeout=5, phrase_time_limit=5)
     
-    with mic as source:
-        r.adjust_for_ambient_noise(source, duration=0.5)
-        try:
-            audio = r.listen(source, timeout=5, phrase_time_limit=5)
-        except sr.WaitTimeoutError:
-            sys.exit(0)
-    
-    try:
-        text = r.recognize_google(audio)
-        if text:
-            print(text)
-            sys.exit(0)
-    except sr.UnknownValueError:
-        pass
-    except sr.RequestError:
-        pass
-    sys.exit(0)
+    # Recognize using Google (requires internet)
+    text = r.recognize_google(audio)
+    if text:
+        print(text.strip())
+        sys.exit(0)
+    else:
+        sys.exit(1)
+        
+except sr.WaitTimeoutError:
+    # No speech detected in timeout period
+    sys.exit(2)
+except sr.UnknownValueError:
+    # Speech detected but couldn't understand
+    sys.exit(3)
 except Exception as e:
-    print(f"Voice error: {e}", file=sys.stderr)
+    print(f"ERROR:{e}", file=sys.stderr)
     sys.exit(1)
-"@
+"@ | Out-File -FilePath $pyFile -Encoding UTF8
         
-        $proc = Start-Process -FilePath "python" `
-            -ArgumentList "-c", $pyScript `
+        # Run the Python script
+        $proc = Start-Process -FilePath "python" -ArgumentList $pyFile `
             -PassThru -WindowStyle Hidden `
-            -RedirectStandardOutput $outFile `
-            -RedirectStandardError $errFile
+            -RedirectStandardOutput $outFile
         
-        # Wait up to 10 seconds
-        $proc.WaitForExit(10000)
+        # Show countdown
+        for ($i = 0; $i -lt 10; $i++) {
+            if ($proc.HasExited) { break }
+            Start-Sleep -Milliseconds 500
+        }
         
-        # Check for output
+        # If still running after 5 seconds, kill it
+        if (-not $proc.HasExited) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        }
+        
+        # Read result
         $result = $null
         if (Test-Path $outFile) {
             $content = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
             if ($content) {
                 $result = $content.Trim()
             }
-            Remove-Item $outFile -Force -ErrorAction SilentlyContinue
         }
         
-        # Check for errors
-        if (Test-Path $errFile) {
-            $errContent = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
-            if ($errContent -and $errContent.Trim()) {
-                Write-Status "Voice error: $($errContent.Trim())" "Warning"
-            }
-            Remove-Item $errFile -Force -ErrorAction SilentlyContinue
-        }
+        # Cleanup
+        Remove-Item $pyFile -Force -ErrorAction SilentlyContinue
+        Remove-Item $outFile -Force -ErrorAction SilentlyContinue
         
         return $result
     }
     catch {
         return $null
-    }
-    finally {
-        # Cleanup
-        if (Test-Path $outFile) { Remove-Item $outFile -Force -ErrorAction SilentlyContinue }
-        if (Test-Path $errFile) { Remove-Item $errFile -Force -ErrorAction SilentlyContinue }
     }
 }
 
@@ -505,27 +520,17 @@ function Start-ChatInterface {
         $userInput = $null
         if ($script:VoiceMode -and $script:VoiceEnabled) {
             Write-Host ""
-            Write-Host "[VOICE] Listening for 5 seconds... SPEAK NOW" -ForegroundColor Yellow
-            Write-Host "        (or press Enter to switch to text mode)" -ForegroundColor Gray
+            Write-Host "[VOICE] Listening... SPEAK NOW (5 seconds)" -ForegroundColor Yellow
             
-            # Check if user pressed Enter immediately (skip voice)
-            if ([Console]::KeyAvailable) {
-                $key = [Console]::ReadKey($true)
-                if ($key.Key -eq "Enter") {
-                    $script:VoiceMode = $false
-                    Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
-                    $userInput = Read-Host
-                }
+            $voiceResult = Get-VoiceInput
+            if ($voiceResult -and $voiceResult -is [string] -and $voiceResult.Trim()) {
+                $userInput = $voiceResult.Trim()
+                Write-Host "You said: $userInput" -ForegroundColor Green
             } else {
-                $voiceResult = Get-VoiceInput
-                if ($voiceResult -and $voiceResult -is [string] -and $voiceResult.Trim()) {
-                    $userInput = $voiceResult.Trim()
-                    Write-Host "You said: $userInput" -ForegroundColor Green
-                } else {
-                    Write-Status "No speech detected" "Warning"
-                    Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
-                    $userInput = Read-Host
-                }
+                Write-Status "No speech detected, switching to text" "Warning"
+                $script:VoiceMode = $false
+                Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
+                $userInput = Read-Host
             }
         } else {
             Write-Host "[TEXT] You: " -ForegroundColor Cyan -NoNewline
