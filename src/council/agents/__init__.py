@@ -43,7 +43,7 @@ __all__ = [
 ]
 
 
-def create_council() -> Dict[str, BaseAgent]:
+def create_council() -> dict[str, BaseAgent]:
     """
     Factory function to create all 6 council agents.
     
