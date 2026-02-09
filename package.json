@@ -5,6 +5,7 @@
   "main": "dist/awaken.js",
   "type": "module",
   "scripts": {
+    "sovereign": "powershell -ExecutionPolicy Bypass -File sovereign.ps1",
     "awaken": "tsx awaken.ts",
     "build": "tsc",
     "dev": "tsx watch server.ts",
@@ -18,6 +19,7 @@
     "god:mode": "powershell -ExecutionPolicy Bypass -File sofie.ps1",
     "god:mode:bash": "bash sofie.sh",
     "terminal": "python admin/admin-terminal.py",
+    "voice": "python voice/sofie_listen.py",
     "voice:lab": "powershell -ExecutionPolicy Bypass -File start-voice-lab.ps1",
     "sovereign:lab": "powershell -ExecutionPolicy Bypass -File start-sovereign-lab.ps1",
     "example:council": "tsx examples/council-code-generation.ts",
