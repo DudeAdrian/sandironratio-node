@@ -16,7 +16,13 @@
     "start:prod": "npm run build && node dist/awaken.js",
     "god:mode": "powershell -ExecutionPolicy Bypass -File sofie.ps1",
     "god:mode:bash": "bash sofie.sh",
-    "terminal": "python admin/admin-terminal.py"
+    "terminal": "python admin/admin-terminal.py",
+    "voice:lab": "powershell -ExecutionPolicy Bypass -File start-voice-lab.ps1",
+    "sovereign:lab": "powershell -ExecutionPolicy Bypass -File start-sovereign-lab.ps1",
+    "example:council": "tsx examples/council-code-generation.ts",
+    "council:status": "node -e \"const c=require('./bridge/council-client.js');c.councilClient.getStatus().then(console.log)\"",
+    "council:health": "node -e \"const c=require('./bridge/council-client.js');c.councilClient.checkHealth()\"",
+    "sofie-llama:health": "node -e \"const s=require('./bridge/sofie-llama-client.js');s.sofieLlamaClient.checkHealth()\""
   },
   "keywords": [
     "sandironratio",

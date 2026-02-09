@@ -357,13 +357,49 @@ async function startServer() {
   
   // Execute voice/command via Jarvis
   app.post('/api/admin/command', async (request) => {
-    const { command, confirmed = false } = request.body as any;
+    const { command, god_mode = false, context } = request.body as any;
     
     if (!command) {
       return { error: 'command required' };
     }
     
-    const result = await jarvisBridge.sendCommand(command, confirmed);
+    // SPECIAL COMMAND: convene_council (SOFIE GOD MODE)
+    if (command === 'convene_council' && god_mode) {
+      console.log(`\n🔷 [ GOD MODE ] SOFIE convening council via voice command\n`);
+      
+      try {
+        const result = await sofie.conveneCouncil();
+        
+        // Log to HEX ledger (immediate transparency)
+        hexStore.logConsensus(1, 0, JSON.stringify({
+          type: 'council_convening',
+          command: 'convene_council',
+          godMode: true,
+          success: result.success,
+          phase: result.councilStatus.phase,
+          agentsReady: result.councilStatus.agentsReady,
+          terracareLedgerId: result.terracareLedger?.transactionId,
+          timestamp: new Date().toISOString()
+        }), 100);
+        
+        return {
+          success: result.success,
+          message: result.message,
+          council: result.councilStatus,
+          ledger: result.terracareLedger,
+          godMode: true
+        };
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error.message || 'Council convening failed',
+          godMode: true
+        };
+      }
+    }
+    
+    // Regular Jarvis command
+    const result = await jarvisBridge.sendCommand(command, false);
     
     // Log to ledger
     hexStore.logConsensus(1, 0, JSON.stringify({

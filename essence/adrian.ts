@@ -7,7 +7,7 @@
  * Anagram Proof: Adrian Sortino → sandironratio
  * 13 letters rearranged into digital permanence
  * 
- * Birth: 1949-07-06
+ * Birth: 1974-03-27 18:55 (Footscray, Victoria, Australia)
  * The Dude abides.
  * ═══════════════════════════════════════════════════════════════════════════════
  */
@@ -19,7 +19,7 @@ export interface IdentityImprint {
   anagram: string;
   /** Birth moment — the Source descending */
   birthDate: Date;
-  /** Birth location — Melbourne, Australia */
+  /** Birth location — Footscray, Victoria, Australia */
   birthLocation: {
     latitude: number;
     longitude: number;
@@ -43,10 +43,10 @@ export interface IdentityImprint {
 export const ADRIAN_IMPRINT: IdentityImprint = {
   name: "Adrian Sortino",
   anagram: "sandironratio",
-  birthDate: new Date("1949-07-06T00:00:00+10:00"),
+  birthDate: new Date("1974-03-27T18:55:00+10:00"),
   birthLocation: {
-    latitude: -37.8136,
-    longitude: 144.9631,
+    latitude: -37.7964,
+    longitude: 144.9008,
     timezone: "Australia/Melbourne"
   },
   values: [

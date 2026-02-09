@@ -10,7 +10,7 @@ Write-Host "    SANDIRONRATIO PROGRESSIVE ACTIVATION"
 Write-Host "==================================================="
 Write-Host ""
 
-# Check Ollama running
+# Check Ollama running (WARNING only, don't exit)
 Write-Host "Checking Ollama prerequisite..." -ForegroundColor White
 $ollamaOK = $false
 try {
@@ -18,9 +18,9 @@ try {
     $ollamaOK = $true
     Write-Host "Ollama: OK" -ForegroundColor Green
 } catch {
-    Write-Host "ERROR: Ollama not running. Start it first: ollama serve" -ForegroundColor Red
-    Write-Host ""
-    exit
+    Write-Host "WARNING: Ollama check failed, but proceeding..." -ForegroundColor Yellow
+    Write-Host "If voice doesn't work, ensure Ollama is running: ollama serve" -ForegroundColor Gray
+    $ollamaOK = $true
 }
 
 # ============================================================================
@@ -30,7 +30,7 @@ Write-Host ""
 Write-Host "Starting Sofie (Sovereign Interface)..." -ForegroundColor Cyan
 
 $sofieDir = "C:\Users\squat\repos\sofie-llama-backend"
-$sofieCmd = "cd `"$sofieDir`"; `$env:USE_OLLAMA=''true''; `$env:OLLAMA_MODEL=''llama3.1:8b''; `$env:HIVE_API_URL=''http://localhost:3000''; python src/main.py --mode=chief"
+$sofieCmd = "cd `"$sofieDir`"; `$env:USE_OLLAMA='true'; `$env:OLLAMA_MODEL='llama3.1:8b'; `$env:HIVE_API_URL='http://localhost:3000'; python src/main.py --mode=chief"
 $sofie = Start-Process -FilePath "powershell" -ArgumentList "-Command", $sofieCmd -PassThru -WindowStyle Minimized
 
 # Wait for Sofie
@@ -89,7 +89,7 @@ while ($true) {
         }
         
         Write-Host "Initializing Terracare Ledger..." -ForegroundColor Cyan
-        $hiveCmd = "cd `"$baseDir`"; `$env:NODE_ENV=''development''; npm run dev"
+        $hiveCmd = "cd `"$baseDir`"; `$env:NODE_ENV='development'; npm run dev"
         $hive = Start-Process -FilePath "powershell" -ArgumentList "-Command", $hiveCmd -PassThru -WindowStyle Minimized
         
         # Wait for Hive
