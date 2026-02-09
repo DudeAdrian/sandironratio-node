@@ -11,8 +11,10 @@
  */
 
 import { EventEmitter } from 'events';
-import { hexStore, Chamber } from '../db/hex-store.js';
-import { hexGrid, HexCoord, NeighborChambers } from '../db/hex-grid.js';
+import { hexStore } from '../db/hex-store.js';
+import type { Chamber } from '../db/hex-store.js';
+import { hexGrid } from '../db/hex-grid.js';
+import type { HexCoord, NeighborChambers } from '../db/hex-grid.js';
 import { HIVES, CHAMBERS_PER_HIVE } from '../config/hives.js';
 
 export interface HexChamber extends Chamber {

@@ -19,8 +19,10 @@ import {
   findNearestHive,
   getHiveStatusSummary 
 } from '../config/hives.js';
-import { hexStore, PollenAgent, MigrationRecord } from '../db/hex-store.js';
-import { hexGrid, HexCoord } from '../db/hex-grid.js';
+import { hexStore } from '../db/hex-store.js';
+import type { PollenAgent, MigrationRecord } from '../db/hex-store.js';
+import { hexGrid } from '../db/hex-grid.js';
+import type { HexCoord } from '../db/hex-grid.js';
 
 export interface MigrationPlan {
   agentId: string;

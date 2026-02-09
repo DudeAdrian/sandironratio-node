@@ -270,5 +270,4 @@ export class SurrenderRitual {
 
 // Export singleton
 export const surrenderRitual = new SurrenderRitual();
-export { SURRENDER_PHRASE };
 export default surrenderRitual;
