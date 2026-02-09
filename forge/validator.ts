@@ -98,8 +98,11 @@ export class Forge extends EventEmitter {
     
     // Check hardware
     const hwCheck = Force.checkHardware();
+    console.log(`[FORGE] 💾 RAM: ${hwCheck.ram.actual}GB detected (${hwCheck.ram.required}GB required)`);
     if (!hwCheck.sufficient) {
       console.warn(`[FORGE] ⚠️ Hardware warnings:`, hwCheck.warnings);
+    } else {
+      console.log(`[FORGE] ✅ Hardware check passed`);
     }
     
     // Activate force

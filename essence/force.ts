@@ -10,6 +10,7 @@
  */
 
 import { randomBytes, createHash } from 'crypto';
+import * as os from 'os';
 
 /**
  * Validator identity
@@ -80,6 +81,7 @@ export class ForceOperator {
   
   /**
    * Check if hardware meets requirements
+   * Aligned for Llama 3.1 8B model (requires 8-12GB RAM)
    */
   checkHardware(): { 
     sufficient: boolean; 
@@ -87,26 +89,26 @@ export class ForceOperator {
     warnings: string[];
   } {
     const warnings: string[] = [];
-    const requiredRamGB = 64;
+    const requiredRamGB = 12; // For Llama 3.1 8B
     
-    // Check available memory (Node.js heap)
-    const memUsage = process.memoryUsage();
-    const totalMemGB = Math.floor(memUsage.heapTotal / (1024 ** 3));
+    // Check actual system RAM using os module
+    const totalMemBytes = os.totalmem();
+    const freeMemBytes = os.freemem();
+    const totalMemGB = Math.round((totalMemBytes / (1024 ** 3)) * 10) / 10;
+    const freeMemGB = Math.round((freeMemBytes / (1024 ** 3)) * 10) / 10;
     
-    // In production, this would check system RAM
-    // For now, we estimate based on available heap
-    const estimatedSystemGB = totalMemGB * 4; // Rough estimate
-    
-    if (estimatedSystemGB < requiredRamGB) {
-      warnings.push(`Insufficient RAM: ${estimatedSystemGB}GB detected, ${requiredRamGB}GB required for Llama 70B`);
+    if (totalMemGB < requiredRamGB) {
+      warnings.push(`Insufficient RAM: ${totalMemGB}GB detected, ${requiredRamGB}GB required for Llama 3.1 8B`);
+    } else if (freeMemGB < 4) {
+      warnings.push(`Low free RAM: ${freeMemGB}GB available (${totalMemGB}GB total)`);
     }
     
     return {
       sufficient: warnings.length === 0,
       ram: {
         required: requiredRamGB,
-        actual: estimatedSystemGB,
-        sufficient: estimatedSystemGB >= requiredRamGB
+        actual: totalMemGB,
+        sufficient: totalMemGB >= requiredRamGB
       },
       warnings
     };
