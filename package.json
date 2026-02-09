@@ -7,7 +7,8 @@
   "scripts": {
     "awaken": "tsx awaken.ts",
     "build": "tsc",
-    "dev": "tsx watch awaken.ts",
+    "dev": "tsx watch server.ts",
+    "server": "tsx server.ts",
     "test": "vitest",
     "forge:start": "tsx forge/validator.ts",
     "observatory:test": "tsx observatory/western.ts",

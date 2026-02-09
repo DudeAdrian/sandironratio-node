@@ -26,7 +26,7 @@ Start-Sleep -Seconds 2
 
 # Start sandironratio-node in new terminal  
 Write-Host "`nStarting SandIronRatio Node..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$sandironNode'; Write-Host '`nSandIronRatio Node (GOD MODE)' -ForegroundColor Green; Write-Host '================================`n' -ForegroundColor Green; npm run dev"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$sandironNode'; Write-Host '`nSandIronRatio Node (GOD MODE)' -ForegroundColor Green; Write-Host '================================`n' -ForegroundColor Green; npm run server"
 
 Write-Host "  Node awakening in new terminal" -ForegroundColor Green
 
