@@ -1,4 +1,26 @@
+# Node
+node_modules/
+dist/
+build/
 
+# Logs
+logs/
+*.log
+
+# Databases
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python (voice components)
 __pycache__/
 *.pyc
 *.pyo
